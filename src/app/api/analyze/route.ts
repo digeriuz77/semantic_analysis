@@ -1,7 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  fireworksChatCompletion,
+  getFireworksApiKey,
+  parseJsonResponse,
+  sanitizeThemes,
+} from "@/lib/fireworks";
+import type { Theme } from "@/types";
 
 const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL || "http://localhost:8000";
-const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY;
+const NLP_TIMEOUT_MS = 30_000;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_AI_TEXT_CHARS = 4000;
+const MAX_CLIENT_TEXT_CHARS = 5000;
+
+interface NlpKeyword {
+  word: string;
+  count: number;
+}
+
+interface NlpServiceResponse {
+  cleaned_text: string;
+  stats: Record<string, number>;
+  top_keywords: NlpKeyword[];
+  sentiment?: { positive: number; neutral: number; negative: number };
+}
+
+function keywordThemes(stats: Record<string, number>, topKeywords: NlpKeyword[]): Theme[] {
+  return topKeywords.slice(0, 5).map((kw) => ({
+    name: kw.word.charAt(0).toUpperCase() + kw.word.slice(1),
+    description: `Cluster related to the concept of "${kw.word}"`,
+    keywords: [kw.word],
+    prevalence: stats.total_words
+      ? Math.min(100, Math.round((kw.count / stats.total_words) * 1000))
+      : 0,
+  }));
+}
+
+async function resolveThemes(
+  cleanedText: string,
+  stats: Record<string, number>,
+  topKeywords: NlpKeyword[]
+): Promise<Theme[]> {
+  if (getFireworksApiKey()) {
+    const prompt = `Analyze the following text using Braun and Clarke's thematic analysis approach. Identify 3-5 key themes. Return ONLY a JSON array of objects with keys: "name", "description", "keywords" (array of strings), "prevalence" (integer 0-100). Do not include markdown formatting.\n\nText: ${cleanedText.substring(0, MAX_AI_TEXT_CHARS)}`;
+    const content = await fireworksChatCompletion({ user: prompt, maxTokens: 1000 });
+    const themes = sanitizeThemes(parseJsonResponse<unknown>(content));
+    if (themes.length > 0) return themes;
+  }
+  return keywordThemes(stats, topKeywords);
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,82 +58,38 @@ export async function POST(request: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
+    if (file.size > MAX_FILE_BYTES) {
+      return NextResponse.json(
+        { error: "File exceeds the 10 MB size limit" },
+        { status: 413 }
+      );
+    }
 
-    // 1. Send file to Python NLP Service for cleaning and basic stats
     const nlpFormData = new FormData();
     nlpFormData.append("file", file);
 
     const nlpResponse = await fetch(`${NLP_SERVICE_URL}/process`, {
       method: "POST",
       body: nlpFormData,
+      signal: AbortSignal.timeout(NLP_TIMEOUT_MS),
     });
 
     if (!nlpResponse.ok) {
-      throw new Error("NLP Service unavailable");
+      throw new Error(`NLP Service unavailable (${nlpResponse.status})`);
     }
 
-    const nlpData = await nlpResponse.json();
-
-    // 2. Use Fireworks AI for Thematic Analysis (Simulated if no key)
-    let themes = [];
-    let sentiment = { positive: 33, neutral: 34, negative: 33 };
-
-    if (FIREWORKS_API_KEY) {
-      // Call Fireworks AI for theme extraction
-      const fwResponse = await fetch("https://api.fireworks.ai/inference/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${FIREWORKS_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "accounts/fireworks/models/llama-v3-70b-instruct",
-          messages: [
-            {
-              role: "user",
-              content: `Analyze the following text using Braun and Clarke's thematic analysis approach. Identify 3-5 key themes. Return ONLY a JSON array of objects with keys: "name", "description", "keywords" (array of strings), "prevalence" (integer 0-100). Do not include markdown formatting.\n\nText: ${nlpData.cleaned_text.substring(0, 4000)}`
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 1000
-        })
-      });
-
-      if (fwResponse.ok) {
-        const fwData = await fwResponse.json();
-        const content = fwData.choices[0].message.content;
-        try {
-          themes = JSON.parse(content.replace(/```json|```/g, "").trim());
-        } catch (e) {
-          console.error("Failed to parse AI themes", e);
-        }
-      }
-    }
-
-    // Fallback themes if AI fails or no key
-    if (themes.length === 0) {
-      themes = nlpData.top_keywords.slice(0, 5).map((kw: any) => ({
-        name: kw.word.charAt(0).toUpperCase() + kw.word.slice(1),
-        description: `Cluster related to the concept of "${kw.word}"`,
-        keywords: [kw.word],
-        prevalence: Math.min(100, Math.round((kw.count / nlpData.stats.total_words) * 1000))
-      }));
-    }
-
-    // Mock sentiment if not provided by NLP service
-    if (nlpData.sentiment) {
-      sentiment = nlpData.sentiment;
-    }
+    const nlpData: NlpServiceResponse = await nlpResponse.json();
+    const themes = await resolveThemes(nlpData.cleaned_text, nlpData.stats, nlpData.top_keywords);
+    const sentiment = nlpData.sentiment ?? { positive: 33, neutral: 34, negative: 33 };
 
     return NextResponse.json({
       fileName: file.name,
       stats: nlpData.stats,
       wordFrequency: nlpData.top_keywords,
-      themes: themes,
-      sentiment: sentiment,
-      cleanedText: nlpData.cleaned_text.substring(0, 5000) // Limit text sent to client
+      themes,
+      sentiment,
+      cleanedText: nlpData.cleaned_text.substring(0, MAX_CLIENT_TEXT_CHARS),
     });
-
   } catch (error) {
     console.error("Analysis error:", error);
     return NextResponse.json(

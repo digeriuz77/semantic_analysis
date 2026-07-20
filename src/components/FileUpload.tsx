@@ -11,6 +11,23 @@ export function FileUpload({ onFilesSelected }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
+  const validateAndAddFiles = useCallback((files: File[]) => {
+    const validTypes = [
+      "text/plain",
+      "application/pdf",
+      "text/csv",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    const validFiles = files.filter((f) => {
+      const ext = f.name.split(".").pop()?.toLowerCase();
+      const isValidExt = ["txt", "pdf", "csv", "docx"].includes(ext || "");
+      return isValidExt || validTypes.includes(f.type);
+    });
+
+    setSelectedFiles((prev) => [...prev, ...validFiles]);
+  }, []);
+
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -28,30 +45,13 @@ export function FileUpload({ onFilesSelected }: FileUploadProps) {
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       validateAndAddFiles(Array.from(e.dataTransfer.files));
     }
-  }, [selectedFiles]);
+  }, [validateAndAddFiles]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
     if (e.target.files && e.target.files.length > 0) {
       validateAndAddFiles(Array.from(e.target.files));
     }
-  };
-
-  const validateAndAddFiles = (files: File[]) => {
-    const validTypes = [
-      "text/plain",
-      "application/pdf",
-      "text/csv",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-
-    const validFiles = files.filter((f) => {
-      const ext = f.name.split(".").pop()?.toLowerCase();
-      const isValidExt = ["txt", "pdf", "csv", "docx"].includes(ext || "");
-      return isValidExt || validTypes.includes(f.type);
-    });
-
-    setSelectedFiles((prev) => [...prev, ...validFiles]);
   };
 
   const removeFile = (index: number) => {
