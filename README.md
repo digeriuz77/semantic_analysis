@@ -20,8 +20,15 @@ frameworks, COREQ) drawn from qualitative-research best practice.
 - **Consensus themes** — semantic clustering groups paraphrased themes; themes
   appearing in ≥50% of runs become consensus themes, tiered high (≥83%) vs
   moderate (50–66%).
+- **Multi-provider** — Fireworks, OpenAI, Anthropic, Google Gemini, and
+  OpenRouter adapters behind a unified `ChatAdapter`. Add API keys in
+  `.env.local` to enable providers; the UI surfaces only configured ones.
+- **Cross-model comparison** — run the same corpus through multiple models
+  simultaneously and compare κ / cosine / consensus counts head-to-head.
+- **Custom prompts** — editor with live `{seed}` / `{text_chunk}` substitution
+  preview; defaults to Braun & Clarke reflexive TA.
 - **Configurable** — seeds, temperature, cosine threshold, occurrence ratio,
-  model, and (Phase 2) custom prompts with `{seed}` / `{text_chunk}`.
+  model, and provider.
 - **Demo mode** — without an LLM key the app generates deterministic themes so
   the reliability dashboard stays fully explorable.
 - **NLP preprocessing** — NLTK tokenization/lemmatization, VADER sentiment,
@@ -91,5 +98,6 @@ teaching reflection) with an `index.json` manifest for a future dataset gallery.
 
 ## Roadmap
 
-See `.kilocode/roadmap.md` for the full phased plan. Phases 0–1 (foundation +
-reliability core) are complete; Phase 2 (multi-provider + custom prompts) is next.
+See `.kilocode/roadmap.md` for the full phased plan. Phases 0–2 (foundation +
+reliability core + multi-provider/model-compare) are complete; Phase 3
+(methodology scaffolding) is next.

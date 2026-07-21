@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { ProcessingView } from "@/components/ProcessingView";
 import { EnsembleDashboard } from "@/components/EnsembleDashboard";
 import { AnalysisConfigurator, defaultConfig } from "@/components/AnalysisConfigurator";
 import { SpecialistView } from "@/components/SpecialistView";
-import type { EnsembleResult, RunConfig, SpecialistResult } from "@/types";
-import { Upload, BarChart3, Microscope, AlertCircle } from "lucide-react";
+import { ModelCompareView } from "@/components/ModelCompareView";
+import type {
+  EnsembleResult,
+  LlmProvider,
+  ModelComparisonResult,
+  RunConfig,
+  SpecialistResult,
+} from "@/types";
+import { Upload, BarChart3, Microscope, GitCompare, AlertCircle } from "lucide-react";
 
-type View = "upload" | "configure" | "results" | "specialist";
+type View = "upload" | "configure" | "results" | "specialist" | "compare";
 
 export default function AnalyzerPage() {
   const [view, setView] = useState<View>("upload");
@@ -17,10 +24,19 @@ export default function AnalyzerPage() {
   const [config, setConfig] = useState<RunConfig>(defaultConfig());
   const [results, setResults] = useState<EnsembleResult[]>([]);
   const [specialistResult, setSpecialistResult] = useState<SpecialistResult | null>(null);
+  const [compareResult, setCompareResult] = useState<ModelComparisonResult | null>(null);
+  const [providers, setProviders] = useState<LlmProvider[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/providers")
+      .then((r) => r.json())
+      .then((data) => setProviders(data.providers ?? []))
+      .catch(() => {});
+  }, []);
 
   const handleFilesSelected = (selected: File[]) => {
     if (selected.length === 0) return;
@@ -105,10 +121,48 @@ export default function AnalyzerPage() {
     }
   };
 
+  const handleCompare = async (specs: { provider: LlmProvider; model: string }[]) => {
+    if (files.length === 0) return;
+    setIsProcessing(true);
+    setError(null);
+    setProgress(0);
+    setProcessingStep(`Comparing ${specs.length} models on ${files[0].name}…`);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", files[0]);
+      formData.append("specs", JSON.stringify(specs));
+      formData.append("seeds", config.seeds.join(","));
+      formData.append("temperature", String(config.temperature));
+      formData.append("cosineThreshold", String(config.cosineThreshold ?? 0.7));
+      formData.append("minOccurrenceRatio", String(config.minOccurrenceRatio ?? 0.5));
+      if (config.promptTemplate) {
+        formData.append("promptTemplate", config.promptTemplate);
+      }
+
+      const res = await fetch("/api/compare-models", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Comparison failed (${res.status})`);
+      }
+      setCompareResult(await res.json());
+      setProgress(100);
+      setView("compare");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Model comparison failed.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const reset = () => {
     setFiles([]);
     setResults([]);
     setSpecialistResult(null);
+    setCompareResult(null);
     setError(null);
     setView("upload");
   };
@@ -138,6 +192,13 @@ export default function AnalyzerPage() {
             onClick={() => results.length > 0 && setView("results")}
           />
           <NavButton
+            icon={GitCompare}
+            label="Compare"
+            active={view === "compare"}
+            disabled={files.length === 0}
+            onClick={() => files.length > 0 && setView("compare")}
+          />
+          <NavButton
             icon={Microscope}
             label="Specialist"
             active={view === "specialist"}
@@ -164,7 +225,7 @@ export default function AnalyzerPage() {
         </div>
       )}
 
-      {isProcessing && <ProcessingView step={processingStep} progress={progress} />}
+      {isProcessing && view !== "compare" && <ProcessingView step={processingStep} progress={progress} />}
 
       {!isProcessing && view === "upload" && (
         <FileUpload onFilesSelected={handleFilesSelected} />
@@ -188,6 +249,17 @@ export default function AnalyzerPage() {
 
       {!isProcessing && view === "specialist" && specialistResult && (
         <SpecialistView result={specialistResult} onBack={() => setView("results")} />
+      )}
+
+      {view === "compare" && files.length > 0 && (
+        <ModelCompareView
+          result={compareResult}
+          isRunning={isProcessing}
+          progress={progress}
+          providers={providers}
+          onRun={handleCompare}
+          onBack={() => setView(results.length > 0 ? "results" : "configure")}
+        />
       )}
     </main>
   );

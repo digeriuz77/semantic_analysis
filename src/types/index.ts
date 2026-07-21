@@ -151,6 +151,29 @@ export interface EnsembleResult {
   demo: boolean;
 }
 
+/** One model's reliability summary for cross-model comparison. */
+export interface ModelComparisonEntry {
+  provider: LlmProvider;
+  model: string;
+  label: string;
+  runCount: number;
+  meanKappa: number | null;
+  kappaBand: KappaBand;
+  meanCosine: number | null;
+  cosinePercent: number | null;
+  consensusCount: number;
+  highConfidenceCount: number;
+  moderateConfidenceCount: number;
+  error?: string;
+  demo: boolean;
+}
+
+export interface ModelComparisonResult {
+  entries: ModelComparisonEntry[];
+  fileName: string;
+  config: Omit<RunConfig, "provider" | "model">;
+}
+
 export interface DatasetDescriptor {
   id: string;
   path: string;
