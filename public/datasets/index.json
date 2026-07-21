@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "description": "Synthetic qualitative corpora for demos and tests. Inspired by the Qualitative-Text-Datasets-for-UX-Research collection; all content is fictional.",
+  "datasets": [
+    {
+      "id": "ux-onboarding-interview",
+      "path": "/datasets/ux-onboarding-interview.txt",
+      "type": "user_interview",
+      "title": "Mobile Banking Onboarding Interview",
+      "summary": "A first-time user describes friction during identity verification, cluttered navigation, and intrusive marketing.",
+      "suggestedMethodology": "reflexive_thematic"
+    },
+    {
+      "id": "open-ended-survey",
+      "path": "/datasets/open-ended-survey.txt",
+      "type": "open_ended_survey",
+      "title": "Open-Ended Survey Responses",
+      "summary": "Short user responses about frustrations with notifications, performance, search, pricing, and support.",
+      "suggestedMethodology": "content_analysis"
+    },
+    {
+      "id": "teaching-reflection",
+      "path": "/datasets/teaching-reflection.txt",
+      "type": "reflection",
+      "title": "Teaching Reflection (Intro CS Lecture)",
+      "summary": "An instructor's reflection on a failed explanation of loops, surfacing assumptions about curriculum order.",
+      "suggestedMethodology": "specialist_reflection"
+    }
+  ]
+}

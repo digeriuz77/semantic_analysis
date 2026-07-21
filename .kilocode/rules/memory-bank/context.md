@@ -2,9 +2,9 @@
 
 ## Current State
 
-**App:** A full-stack "Semantic & Thematic Analyzer" — Next.js 16 frontend + Python (FastAPI/NLTK) NLP service + Fireworks AI (Llama 3 70B) for thematic analysis, plus a Schön double-loop teaching-reflection "Specialist" lens. Functional today in single-run mode.
+**App:** Evolved from a single-shot theme extractor into a **reliability-quantified ensemble** thematic analyzer. The headline flow now runs N reproducible seeded LLM runs per document and reports dual reliability metrics (Cohen's κ + cosine) with confidence-tiered consensus themes. The legacy single-run `/api/analyze` route is kept but unused by the UI; the new `/api/analyze-ensemble` is the primary path. A demo mode (deterministic mock themes) keeps the dashboard explorable without an LLM key.
 
-**Strategic direction (added 2026-07-21):** Evolve from a single-shot theme extractor into a **reliability-quantified, methodologically rigorous** qualitative research platform, synthesizing three external knowledge sources.
+**Phases 0 and 1 are COMPLETE** (see `.kilocode/roadmap.md`). Next: Phase 2 (multi-provider adapters + custom prompts + model compare).
 
 ## What the three sources contribute
 
@@ -20,11 +20,17 @@
 - [x] Reviewed both GitHub repos and the reliability article
 - [x] Authored master plan → `.kilocode/roadmap.md` (target architecture + 5-phase roadmap + decisions + risks + definition of done)
 - [x] Updated `architecture.md` to capture current + target patterns
-- [x] Updated this `context.md`
+- [x] **Phase 0 — foundation:** migrated Tailwind to v4 `@theme` (navy/gold colors now compile; removed v3 `tailwind.config.ts`); seeded `public/datasets/` (interview, survey, teaching-reflection + `index.json`); removed build-time Google Fonts dependency (system font stack); NLP-down resilience via structured 503 `NLP_UNAVAILABLE` error.
+- [x] **Phase 1 — reliability core:** Python `reliability.py` (embed → Union-Find cluster → consensus → Cohen's κ + run-centroid cosine); `/reliability` + `/embed` endpoints; VADER sentiment (NLTK built-in); TS `ChatAdapter` abstraction (`src/lib/llm/`) + ensemble runner (`ensemble.ts`) + prompt engine (`prompts.ts`) + demo generator (`demo.ts`) + NLP client (`nlp.ts`); orchestrator `/api/analyze-ensemble`; UI `AnalysisConfigurator` + `EnsembleDashboard` (κ band, cosine heatmap, consensus tiers, per-run view); rewired analyzer page (upload → configure → results); retired legacy `Dashboard.tsx`.
+- [x] Verified: `bun typecheck` ✓, `bun lint` ✓, `bun build` ✓ (all routes register incl. `ƒ /api/analyze-ensemble`); demo engine smoke-tested (6 runs → 4 consensus themes).
 
 ## Current Focus
 
-Planning complete. Awaiting go-ahead to begin **Phase 0 (foundation/hardening)** then **Phase 1 (reliability core)** — the highest-leverage work that converts the app into a research-grade tool.
+Phases 0–1 complete and verified. Next is **Phase 2** (multi-provider `ChatAdapter` modules for OpenAI/Anthropic/Gemini/OpenRouter + custom-prompt editor with `{seed}`/`{text_chunk}` + head-to-head ModelCompare view). Then Phase 3 (methodology: paradigm selection, frameworks library, COREQ, saturation).
+
+## Verification notes (sandbox limitations)
+- No `pip` in the sandbox → the Python reliability engine (`reliability.py`) is syntax-verified + logic-reviewed but not runtime-tested here; it runs in its own venv per the README. It degrades gracefully (TF-IDF when `sentence-transformers` absent).
+- Port 3000 is served by the sandbox proxy which 404s API POST routes (even pre-existing `/api/analyze`), so API routes can't be curl-tested here. Build output confirms `ƒ /api/analyze-ensemble` is registered; the pure-TS demo engine was smoke-tested directly.
 
 ## Phase Summary (full detail in `.kilocode/roadmap.md`)
 - **Phase 0** — Foundation: reconcile Tailwind, normalize env/keys, NLP-resilience, lint/typecheck gate, seed demo datasets.
@@ -44,11 +50,19 @@ Planning complete. Awaiting go-ahead to begin **Phase 0 (foundation/hardening)**
 ## Key files to know
 | File | Purpose |
 |------|---------|
-| `src/app/api/analyze/route.ts` | current single-run theme analysis |
-| `src/app/api/specialist/route.ts` | current Schön reflection analysis |
-| `src/lib/fireworks.ts` | single-provider LLM client + sanitizers |
-| `src/types/index.ts` | AnalysisResult, Theme, SpecialistResult, NLPStats |
-| `nlp_service/main.py` | NLTK extraction/stats/sentiment |
+| `src/app/api/analyze-ensemble/route.ts` | **primary** orchestrator: NLP → ensemble runs → reliability |
+| `src/lib/ensemble.ts` | runs N seeded LLM calls in parallel |
+| `src/lib/llm/` | `ChatAdapter` abstraction + Fireworks adapter + registry |
+| `src/lib/nlp.ts` | Python `/process` + `/reliability` client (raises `NlpUnavailableError`) |
+| `src/lib/demo.ts` | deterministic no-key demo ensemble |
+| `src/lib/kappa.ts` | Landis-Koch band labels/colors + helpers |
+| `src/components/AnalysisConfigurator.tsx` | seeds/temp/threshold/model config UI |
+| `src/components/EnsembleDashboard.tsx` | reliability + consensus + per-run dashboard |
+| `src/types/index.ts` | RunConfig, ReliabilityReport, ConsensusTheme, EnsembleResult |
+| `nlp_service/reliability.py` | embed + cluster + consensus + κ + cosine |
+| `nlp_service/main.py` | `/process` `/reliability` `/embed` `/health`; VADER sentiment |
+| `src/app/api/analyze/route.ts` | legacy single-run route (kept, unused by UI) |
+| `src/lib/fireworks.ts` | legacy single-provider client + JSON/theme sanitizers (still reused) |
 | `.kilocode/roadmap.md` | **master plan** |
 
 ## Session History
@@ -56,3 +70,4 @@ Planning complete. Awaiting go-ahead to begin **Phase 0 (foundation/hardening)**
 | Date | Changes |
 |------|---------|
 | 2026-07-21 | Architect review: diagnosed current app, synthesized 3 sources, authored roadmap + updated architecture/context memory banks. |
+| 2026-07-21 | Implemented Phase 0 (Tailwind v4 migration, datasets, font/resilience hardening) and Phase 1 (reliability core: Python engine + orchestrator route + configurator/dashboard UI + ensemble flow). typecheck/lint/build green. |

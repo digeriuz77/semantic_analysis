@@ -4,7 +4,7 @@ import re
 import math
 import string
 from typing import List, Dict, Any
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import nltk
 from nltk.corpus import stopwords
@@ -12,6 +12,8 @@ from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.stem import WordNetLemmatizer
 from nltk.probability import FreqDist
 from collections import Counter
+
+from reliability import compute_reliability, embed_texts
 
 # Try importing optional heavy dependencies
 try:
@@ -32,6 +34,16 @@ nltk.download("punkt_tab", quiet=True)
 nltk.download("stopwords", quiet=True)
 nltk.download("wordnet", quiet=True)
 nltk.download("averaged_perceptron_tagger", quiet=True)
+nltk.download("vader_lexicon", quiet=True)
+
+# VADER sentiment analyzer (validated lexicon; degrades to heuristic if absent).
+try:
+    from nltk.sentiment import SentimentIntensityAnalyzer
+    SIA = SentimentIntensityAnalyzer()
+    VADER_OK = True
+except Exception:
+    SIA = None
+    VADER_OK = False
 
 app = FastAPI(title="NLP Service for Thematic Analyzer")
 
@@ -45,6 +57,40 @@ app.add_middleware(
 
 STOP_WORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
+
+# Lexicon used only when VADER is unavailable (validated lexicon preferred above).
+POSITIVE_WORDS = {
+    "good", "great", "excellent", "positive", "happy", "success", "successful",
+    "well", "better", "best", "love", "wonderful", "fantastic", "impressive",
+    "enjoy", "benefit", "helpful", "effective", "improve", "growth", "achieve",
+}
+NEGATIVE_WORDS = {
+    "bad", "poor", "terrible", "negative", "sad", "fail", "failure", "worse",
+    "worst", "hate", "awful", "disappointing", "difficult", "problem", "issue",
+    "struggle", "wrong", "error", "weak", "lack",
+}
+
+
+def compute_sentiment(text: str, processed_words: PyList[str]) -> Dict[str, float]:
+    """VADER sentiment (validated lexicon); lexical fallback if unavailable."""
+    if VADER_OK and SIA is not None:
+        scores = SIA.polarity_scores(text)
+        return {
+            "positive": round(scores["pos"] * 100, 1),
+            "neutral": round(scores["neu"] * 100, 1),
+            "negative": round(scores["neg"] * 100, 1),
+        }
+    pos_count = sum(1 for w in processed_words if w in POSITIVE_WORDS)
+    neg_count = sum(1 for w in processed_words if w in NEGATIVE_WORDS)
+    total = len(processed_words)
+    if total > 0:
+        neutral_count = max(0, total - pos_count - neg_count)
+        return {
+            "positive": round(pos_count / total * 100, 1),
+            "neutral": round(neutral_count / total * 100, 1),
+            "negative": round(neg_count / total * 100, 1),
+        }
+    return {"positive": 33.3, "neutral": 33.4, "negative": 33.3}
 
 # Additional common filler/placeholder words that add no thematic value
 # These are function words or vague references, NOT content verbs
@@ -145,26 +191,8 @@ def process_corpus(text: str) -> Dict[str, Any]:
     else:
         flesch_score = 0
 
-    # Simple Sentiment (Heuristic based on positive/negative word lists)
-    positive_words = {"good", "great", "excellent", "positive", "happy", "success", "successful", "well", "better", "best", "love", "wonderful", "fantastic", "impressive", "enjoy", "benefit", "helpful", "effective", "improve", "growth", "achieve"}
-    negative_words = {"bad", "poor", "terrible", "negative", "sad", "fail", "failure", "worse", "worst", "hate", "awful", "disappointing", "difficult", "problem", "issue", "struggle", "wrong", "error", "weak", "lack"}
-
-    pos_count = sum(1 for w in processed_words if w in positive_words)
-    neg_count = sum(1 for w in processed_words if w in negative_words)
-    total_sentiment_words = pos_count + neg_count
-
-    if total_sentiment_words > 0:
-        sentiment = {
-            "positive": round((pos_count / total_sentiment_words) * 100, 1),
-            "neutral": round(max(0, 100 - (pos_count + neg_count) * 5), 1), # Rough estimate
-            "negative": round((neg_count / total_sentiment_words) * 100, 1)
-        }
-        # Normalize sentiment to 100
-        total_sent = sentiment["positive"] + sentiment["neutral"] + sentiment["negative"]
-        if total_sent > 0:
-            sentiment = {k: round((v/total_sent)*100, 1) for k, v in sentiment.items()}
-    else:
-        sentiment = {"positive": 33.3, "neutral": 33.4, "negative": 33.3}
+    # Sentiment (VADER on the original text; lexical fallback handled internally)
+    sentiment = compute_sentiment(text, processed_words)
 
     cleaned_text = clean_text(text)
 
@@ -203,9 +231,61 @@ async def process_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/reliability")
+async def reliability_endpoint(request: Request):
+    """Dual-metric reliability (Cohen's kappa + cosine) + consensus themes.
+
+    Accepts raw JSON: { runs: [ { themes: [ {name, description, keywords} ] } ],
+    cosine_threshold?, min_occurrence_ratio? }. Structure-agnostic: any valid
+    theme objects are accepted.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    runs = body.get("runs", [])
+    if not isinstance(runs, list):
+        raise HTTPException(status_code=400, detail="'runs' must be a list")
+    cosine_threshold = float(body.get("cosine_threshold", 0.70))
+    min_occurrence_ratio = float(body.get("min_occurrence_ratio", 0.5))
+    return compute_reliability(runs, cosine_threshold, min_occurrence_ratio)
+
+
+@app.post("/embed")
+async def embed_endpoint(request: Request):
+    """Embed a list of texts. Backend is sentence-transformers if installed,
+    otherwise TF-IDF. Returned vectors are L2-normalized."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    texts = body.get("texts", [])
+    if not isinstance(texts, list):
+        raise HTTPException(status_code=400, detail="'texts' must be a list")
+    vecs, backend = embed_texts([str(t) for t in texts])
+    return {
+        "vectors": vecs.tolist(),
+        "dim": int(vecs.shape[1]) if vecs.size else 0,
+        "backend": backend,
+        "count": int(vecs.shape[0]),
+    }
+
+
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "nltk_data": "loaded"}
+    return {
+        "status": "healthy",
+        "nltk_data": "loaded",
+        "embedding_backend": "sentence-transformers" if _ST_AVAILABLE() else "tfidf",
+    }
+
+
+def _ST_AVAILABLE() -> bool:
+    try:
+        from reliability import get_embedding_backend
+        return get_embedding_backend() == "sentence-transformers"
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

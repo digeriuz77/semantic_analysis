@@ -1,38 +1,60 @@
 # System Patterns: Semantic & Thematic Analyzer
 
-## Architecture Overview (current)
+## Architecture Overview (after Phase 0–1)
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                 # redirects to /analyzer
-│   ├── analyzer/page.tsx        # client view-router: upload | dashboard | specialist
+│   ├── page.tsx                       # redirects to /analyzer
+│   ├── analyzer/page.tsx              # flow: upload → configure → results (+ specialist)
 │   ├── api/
-│   │   ├── analyze/route.ts     # file → NLP service → Fireworks (single LLM theme run)
-│   │   └── specialist/route.ts  # Schön double-loop reflection via Fireworks
-│   ├── layout.tsx, globals.css
-├── components/                  # FileUpload, Dashboard, ProcessingView, SpecialistView
-├── lib/fireworks.ts             # single-provider LLM client + JSON/theme sanitizers
-└── types/index.ts               # AnalysisResult, Theme, SpecialistResult, NLPStats
+│   │   ├── analyze-ensemble/route.ts  # PRIMARY orchestrator: NLP → ensemble → reliability
+│   │   ├── analyze/route.ts           # legacy single-run (kept, unused by UI)
+│   │   └── specialist/route.ts        # Schön double-loop reflection
+│   ├── layout.tsx, globals.css        # Tailwind v4 @theme (navy/gold/system font)
+├── components/
+│   ├── FileUpload, ProcessingView, SpecialistView
+│   ├── AnalysisConfigurator.tsx       # seeds/temp/threshold/model
+│   └── EnsembleDashboard.tsx          # κ + cosine heatmap + consensus tiers + per-run
+├── lib/
+│   ├── llm/  (types.ts, fireworks.ts, index.ts)   # ChatAdapter abstraction
+│   ├── ensemble.ts   prompts.ts   demo.ts   nlp.ts   kappa.ts
+│   └── fireworks.ts                    # legacy client + shared JSON/theme sanitizers
+└── types/index.ts                      # + RunConfig, ReliabilityReport, ConsensusTheme, EnsembleResult
 
-nlp_service/                     # Python FastAPI + NLTK
-└── main.py                      # /process (extract/clean/stats/heuristic sentiment), /health
+nlp_service/
+├── main.py          # /process (NLTK + VADER) /reliability /embed /health
+├── reliability.py   # embed → Union-Find cluster → consensus → Cohen's κ + cosine
+└── requirements.txt
+
+public/datasets/     # synthetic corpora + index.json (demo gallery / fixtures)
 ```
 
-## How a request flows today
-1. Browser uploads file(s) → `/api/analyze`.
-2. API forwards file to Python `/process` (NLTK stats + heuristic sentiment + cleaned text).
-3. API calls Fireworks **once** for 3-5 themes (falls back to keyword-derived "themes" if no key).
-4. Dashboard renders stats, word-frequency chart, sentiment rings, themes, cleaned text.
-5. Optional `/api/specialist` runs a second single LLM call for Schön reflection analysis.
+## How a request flows now (primary path)
+1. Browser uploads file(s) → `/api/analyze-ensemble` (server-side, keys never shipped).
+2. API calls Python `/process` → cleaning, NLTK stats, **VADER** sentiment, keywords.
+3. API runs the ensemble: N parallel LLM calls (one per seed) via `ChatAdapter`,
+   or `generateDemoRuns` if no key is configured (demo mode).
+4. API calls Python `/reliability` → embeddings → Union-Find clustering into
+   equivalence classes → consensus themes (confidence tiers) → Cohen's κ
+   (Landis-Koch bands) + run-centroid cosine matrix.
+5. `EnsembleDashboard` renders reliability metrics, consensus themes, overview,
+   and per-run themes.
 
-## Known limitations (drives the roadmap)
-- Single LLM run → no reliability signal (is a theme robust or an artifact?).
-- No Cohen's κ, no cosine/semantic consistency.
-- One provider (Fireworks/Llama 3 70B); keys env-resolved server-side ✓.
-- Heuristic sentiment (word-list), not a validated lexicon.
-- Teaching lens hardcoded; no paradigm/methodology selection, no COREQ, no saturation.
-- No export / reproducibility manifest.
+## Reliability engine details (nlp_service/reliability.py)
+- Embeddings: `sentence-transformers` all-MiniLM-L6-v2 if installed, else TF-IDF
+  (sklearn) — surfaced as `embeddingBackend` so users know.
+- Clustering: connected components (Union-Find) over cosine ≥ threshold.
+- κ: `cohen_kappa_score` on theme presence/absence vectors per run pair.
+- Cosine: run-centroid dot product (normalised embeddings).
+- Returns null κ/cosine when <2 runs or insufficient themes.
+
+## Known limitations remaining (drives Phases 2–4)
+- Single provider wired (Fireworks); `ChatAdapter` ready for Phase 2 providers.
+- Custom prompt UI not yet exposed (engine exists in `prompts.ts`).
+- No paradigm/methodology selection, COREQ, saturation (Phase 3).
+- No export / reproducibility manifest (Phase 4).
+- No DB persistence (Phase 5).
 
 ## Target architecture (see `.kilocode/roadmap.md` for full plan)
 

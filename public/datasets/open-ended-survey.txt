@@ -1,0 +1,21 @@
+Open-Ended Survey Responses: "What was your biggest frustration with the new feature?"
+
+The notifications are way too frequent. I get pinged for every little thing and it made me turn them all off, which means I miss the ones that actually matter.
+
+I wanted to like it but it crashed twice during onboarding. Lost my progress both times. Not great for a first impression.
+
+Honestly the feature itself is fine, the problem is no one explained how to use it. I had to hunt through help docs to figure out the basic workflow. A short tutorial would have saved me an hour.
+
+Speed is my main complaint. Everything feels sluggish, especially on mobile data. I'm tapping things and waiting, which makes it feel broken even when it isn't.
+
+I love the idea but the pricing surprised me. It wasn't clear during sign-up that the good parts were locked behind a paywall. Felt a bit bait and switch.
+
+Search is useless. I type exactly what I'm looking for and it returns unrelated results. Half the time I can't find my own saved items.
+
+The interface is clean but too minimal — there are no labels on the icons and I keep guessing what they do. Accessibility seems like an afterthought.
+
+It's reliable now, which I appreciate. The earlier version was buggy and I'd given up on it, but this release actually works. Keep that stability going.
+
+Customer support never replied to my ticket. Twelve days and counting. The product might be improving but if I can't get help when something breaks I can't trust it for work.
+
+More customization please. The defaults assume one way of working and I don't fit that mold. Let me rearrange the dashboard and hide what I don't use.

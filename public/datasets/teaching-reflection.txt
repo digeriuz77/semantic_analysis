@@ -1,0 +1,13 @@
+Teaching Reflection: Introductory Computer Science Lecture, Week 6
+
+Today's session on loops didn't go the way I planned. I'd prepared a clean worked example building up from a simple counter to a nested loop, and I expected the class to follow along smoothly. Instead, I could see most of the students glazing over about ten minutes in.
+
+My first instinct was to assume they just weren't paying attention, and I caught myself speeding up to "get through" the material. But when I stopped and actually asked a student to explain the loop back to me, it became obvious the problem wasn't effort — it was that I'd skipped the conceptual bridge. I'd assumed they understood that a loop repeats a block, and jumped straight to the syntax of the condition and the increment.
+
+That's where I think I went wrong. I've taught this topic for three years now, and somewhere along the way the gap between what I know and what a beginner finds hard became invisible to me. The "curse of knowledge," I suppose. The thing I didn't question was my assumption that because the textbook orders topics this way, it must be the right order. I never actually asked whether nesting loops before students are fluent with single loops is sound pedagogically.
+
+So I made a change on the fly. I abandoned the nested example, went back to a single loop, and had them predict the output before running it. Engagement came back almost immediately. Students started asking each other questions instead of waiting for me to fill the silence.
+
+But here's the part I want to sit with: I was only able to make that pivot because I noticed the silence and resisted the urge to push through. That's a habit I want to strengthen. Too often my teaching is driven by covering the syllabus rather than by whether learning is happening. The syllabus is my goal, but it shouldn't be the governing variable — student understanding should be.
+
+Next week I'm going to restructure the whole sequence so that fluency with a single loop is the foundation, assessed with prediction exercises, before we touch anything nested. I also want to build in two "check for understanding" moments per session where I explicitly stop and listen. And I should question my other inherited assumptions — like whether live-coding at the front is actually the best format, or whether students would learn more from working through examples in pairs first.

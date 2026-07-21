@@ -1,0 +1,25 @@
+Interview Transcript: Mobile Banking App Onboarding Study
+Participant: P03 (first-time user, age 34)
+Researcher: So, walk me through what your first few minutes with the app were like.
+
+Participant: Honestly, I almost gave up. The very first screen asked me to verify my identity with three different methods — text, email, and a selfie. It felt excessive. I get that security matters, but by the time I got to the third step I was wondering if it was worth it.
+
+Researcher: What made you keep going?
+
+Participant: I needed to transfer rent that day, so I didn't really have a choice. But if it had been optional, I probably would have closed it. The selfie part was the worst — it kept rejecting my photo because the lighting was bad, and there was no clear instruction on what it wanted.
+
+Researcher: How did you feel about the layout once you were inside?
+
+Participant: Confusing at first. The dashboard has way too many things competing for attention. There's my balance, a bunch of promotional cards, a "discover" section, and then the actual transfer button is small and tucked in a corner. I spent maybe two minutes just trying to find where to send money. That's the main thing I came to do, and it was hidden.
+
+Researcher: You mentioned the promotional cards. Can you say more?
+
+Participant: Yeah, it felt like the app cared more about selling me credit cards and insurance than helping me bank. Every time I completed a step, a popup would appear asking if I wanted to apply for something. It made the whole experience feel transactional and pushy, not like a tool that's on my side.
+
+Researcher: Was there anything that worked well?
+
+Participant: The fingerprint login, once it was set up, was genuinely nice. Fast and frictionless. And the confirmation screen after I sent the rent was clear and reassuring — it showed the amount, the recipient, and a reference number. That part felt trustworthy. I just wish the rest of the app matched that clarity.
+
+Researcher: If you could change one thing, what would it be?
+
+Participant: Put the core actions front and center. Sending money, checking my balance, paying a bill — those should be the biggest buttons. Everything else, the marketing stuff, should be optional and out of the way. Right now it feels like the app is designed for the bank's goals, not mine.
