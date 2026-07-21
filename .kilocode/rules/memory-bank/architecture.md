@@ -1,120 +1,74 @@
-# System Patterns: Next.js Starter Template
+# System Patterns: Semantic & Thematic Analyzer
 
-## Architecture Overview
+## Architecture Overview (current)
 
 ```
 src/
-├── app/                    # Next.js App Router
-│   ├── layout.tsx          # Root layout + metadata
-│   ├── page.tsx            # Home page
-│   ├── globals.css         # Tailwind imports + global styles
-│   └── favicon.ico         # Site icon
-└── (expand as needed)
-    ├── components/         # React components (add when needed)
-    ├── lib/                # Utilities and helpers (add when needed)
-    └── db/                 # Database files (add via recipe)
+├── app/
+│   ├── page.tsx                 # redirects to /analyzer
+│   ├── analyzer/page.tsx        # client view-router: upload | dashboard | specialist
+│   ├── api/
+│   │   ├── analyze/route.ts     # file → NLP service → Fireworks (single LLM theme run)
+│   │   └── specialist/route.ts  # Schön double-loop reflection via Fireworks
+│   ├── layout.tsx, globals.css
+├── components/                  # FileUpload, Dashboard, ProcessingView, SpecialistView
+├── lib/fireworks.ts             # single-provider LLM client + JSON/theme sanitizers
+└── types/index.ts               # AnalysisResult, Theme, SpecialistResult, NLPStats
+
+nlp_service/                     # Python FastAPI + NLTK
+└── main.py                      # /process (extract/clean/stats/heuristic sentiment), /health
 ```
 
-## Key Design Patterns
+## How a request flows today
+1. Browser uploads file(s) → `/api/analyze`.
+2. API forwards file to Python `/process` (NLTK stats + heuristic sentiment + cleaned text).
+3. API calls Fireworks **once** for 3-5 themes (falls back to keyword-derived "themes" if no key).
+4. Dashboard renders stats, word-frequency chart, sentiment rings, themes, cleaned text.
+5. Optional `/api/specialist` runs a second single LLM call for Schön reflection analysis.
 
-### 1. App Router Pattern
+## Known limitations (drives the roadmap)
+- Single LLM run → no reliability signal (is a theme robust or an artifact?).
+- No Cohen's κ, no cosine/semantic consistency.
+- One provider (Fireworks/Llama 3 70B); keys env-resolved server-side ✓.
+- Heuristic sentiment (word-list), not a validated lexicon.
+- Teaching lens hardcoded; no paradigm/methodology selection, no COREQ, no saturation.
+- No export / reproducibility manifest.
 
-Uses Next.js App Router with file-based routing:
+## Target architecture (see `.kilocode/roadmap.md` for full plan)
+
 ```
-src/app/
-├── page.tsx           # Route: /
-├── about/page.tsx     # Route: /about
-├── blog/
-│   ├── page.tsx       # Route: /blog
-│   └── [slug]/page.tsx # Route: /blog/:slug
-└── api/
-    └── route.ts       # API Route: /api
-```
+Browser (Next.js 16 App Router)
+  ResearchDesign → Upload/Gallery → Configure(seeds,temp,model,prompt)
+    → RunEnsemble → ReliabilityDashboard → ConsensusThemes → Export
+  src/lib/llm/        ChatAdapter interface + per-provider modules (server-only keys)
+  src/lib/frameworks  analytical frameworks library (Schön is one of many)
+  src/lib/prompts     {seed}/{text_chunk} template engine
 
-### 2. Component Organization Pattern (When Expanding)
+Next.js API (server)
+  /api/analyze-ensemble  /api/reliability  /api/consensus
+  /api/frameworks        /api/export      (/api/analyze kept for migration)
 
-```
-src/components/
-├── ui/                # Reusable UI components (Button, Card, etc.)
-├── layout/            # Layout components (Header, Footer)
-├── sections/          # Page sections (Hero, Features, etc.)
-└── forms/             # Form components
-```
+Python NLP Service (existing /process + /health)
+  NEW /embed (sentence-transformers all-MiniLM-L6-v2)
+  NEW /kappa (sklearn pairwise + aggregate, Landis-Koch bands)
+  NEW /sentiment (VADER)   NEW /consensus (semantic clustering)
 
-### 3. Server Components by Default
-
-All components are Server Components unless marked with `"use client"`:
-```tsx
-// Server Component (default) - can fetch data, access DB
-export default function Page() {
-  return <div>Server rendered</div>;
-}
-
-// Client Component - for interactivity
-"use client";
-export default function Counter() {
-  const [count, setCount] = useState(0);
-  return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
-}
+public/datasets/         Demo gallery + benchmark transcript
+.kilocode/methodology/   Distilled methodology references (paradigms, COREQ, saturation)
 ```
 
-### 4. Layout Pattern
+## Key design patterns
+- **Server-only secrets:** all LLM keys read from env in API routes; never shipped to the browser.
+- **Graceful degradation:** no key → deterministic demo/mock output (already used in specialist route; standardize).
+- **Provider abstraction:** one `ChatAdapter` interface so multi-provider (Phase 2) is additive, not a rewrite.
+- **Ensemble + dual metrics:** configurable seeds/temp/model → multiple runs → κ (categorical) + cosine (semantic) → structure-agnostic consensus with confidence tiers.
+- **Paradigm-aware:** metrics surfaced depend on chosen paradigm (constructivist → trustworthiness; post-positivist → κ).
 
-Layouts wrap pages and can be nested:
-```tsx
-// src/app/layout.tsx - Root layout
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
-}
+## File naming & conventions
+- Components: PascalCase; utilities: camelCase; routes: lowercase `page.tsx`/`route.ts`.
+- Server Components by default; `"use client"` only where interactivity is required.
+- Styling: Tailwind utilities directly on elements; shared card/section classes composed where repeated.
 
-// src/app/dashboard/layout.tsx - Nested layout
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex">
-      <Sidebar />
-      <main>{children}</main>
-    </div>
-  );
-}
-```
-
-## Styling Conventions
-
-### Tailwind CSS Usage
-- Utility classes directly on elements
-- Component composition for repeated patterns
-- Responsive: `sm:`, `md:`, `lg:`, `xl:`
-
-### Common Patterns
-```tsx
-// Container
-<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
-// Responsive grid
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-// Flexbox centering
-<div className="flex items-center justify-center">
-```
-
-## File Naming Conventions
-
-- Components: PascalCase (`Button.tsx`, `Header.tsx`)
-- Utilities: camelCase (`utils.ts`, `helpers.ts`)
-- Pages/Routes: lowercase (`page.tsx`, `layout.tsx`)
-- Directories: kebab-case (`api-routes/`) or lowercase (`components/`)
-
-## State Management
-
-For simple needs:
-- `useState` for local component state
-- `useContext` for shared state
-- Server Components for data fetching
-
-For complex needs (add when necessary):
-- Zustand for client state
-- React Query for server state
+## State management
+- Today: local `useState` in the analyzer page; no global store, no persistence.
+- Target: in-session + `localStorage` for configs/manifests (Phase 4); optional DB via add-database recipe only in Phase 5.
