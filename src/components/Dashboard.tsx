@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AnalysisResult } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { FileText, TrendingUp, Activity, BrainCircuit, ChevronRight } from "lucide-react";
+import { FileText, TrendingUp, Activity, BrainCircuit, ChevronRight, type LucideIcon } from "lucide-react";
 
 interface DashboardProps {
   results: AnalysisResult[];
@@ -68,7 +68,7 @@ export function Dashboard({ results, onRunSpecialist, onReset }: DashboardProps)
         />
         <StatCard
           title="Sentences"
-          value={data.stats.sentences}
+          value={data.stats.sentences.toLocaleString()}
           icon={FileText}
           color="text-purple-400"
         />
@@ -174,7 +174,7 @@ export function Dashboard({ results, onRunSpecialist, onReset }: DashboardProps)
   );
 }
 
-function StatCard({ title, value, icon: Icon, color }: { title: string; value: string; icon: any; color: string }) {
+function StatCard({ title, value, icon: Icon, color }: { title: string; value: string; icon: LucideIcon; color: string }) {
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
       <div className="flex justify-between items-start mb-4">

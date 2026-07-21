@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  fireworksChatCompletion,
+  getFireworksApiKey,
+  parseJsonResponse,
+  sanitizeSpecialistResult,
+} from "@/lib/fireworks";
+import type { SpecialistResult } from "@/types";
 
-const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY;
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { text, mode } = body;
-
-    if (!text) {
-      return NextResponse.json({ error: "Text is required" }, { status: 400 });
-    }
-
-    // If no API key, return mock data for demonstration
-    if (!FIREWORKS_API_KEY) {
-      return NextResponse.json(generateMockSpecialistResult());
-    }
-
-    const prompt = `You are an expert educational researcher specializing in Donald Schön's theory of reflective practice.
+const SPECIALIST_PROMPT_PREFIX = `You are an expert educational researcher specializing in Donald Schön's theory of reflective practice.
 Analyze the following teaching reflection text.
 
 1. Assess the quality of reflection (Emerging, Developing, Proficient, Exemplary).
@@ -35,40 +26,47 @@ Return ONLY valid JSON in this format:
 }
 
 Text to analyze:
-${text.substring(0, 5000)}`;
+`;
 
-    const response = await fetch("https://api.fireworks.ai/inference/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${FIREWORKS_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "accounts/fireworks/models/llama-v3-70b-instruct",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 1500
-      })
-    });
+const MAX_SPECIALIST_TEXT_CHARS = 5000;
 
-    const data = await response.json();
-    const content = data.choices[0].message.content;
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { text } = body;
 
-    try {
-      const result = JSON.parse(content.replace(/```json|```/g, "").trim());
-      return NextResponse.json(result);
-    } catch (e) {
-      // Fallback if JSON parsing fails
+    if (!text) {
+      return NextResponse.json({ error: "Text is required" }, { status: 400 });
+    }
+
+    if (!getFireworksApiKey()) {
       return NextResponse.json(generateMockSpecialistResult());
     }
 
+    const content = await fireworksChatCompletion({
+      user: `${SPECIALIST_PROMPT_PREFIX}${text.substring(0, MAX_SPECIALIST_TEXT_CHARS)}`,
+      maxTokens: 1500,
+    });
+
+    const result = sanitizeSpecialistResult(parseJsonResponse<unknown>(content));
+    if (!result) {
+      return NextResponse.json(
+        { error: "Failed to parse specialist analysis" },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Specialist error:", error);
-    return NextResponse.json(generateMockSpecialistResult());
+    return NextResponse.json(
+      { error: "Specialist analysis failed" },
+      { status: 500 }
+    );
   }
 }
 
-function generateMockSpecialistResult() {
+function generateMockSpecialistResult(): SpecialistResult {
   return {
     reflectionQuality: "Developing",
     score: 65,
