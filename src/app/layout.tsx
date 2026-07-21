@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Semantic & Thematic Analyzer",
-  description: "Advanced corpus analysis using Braun & Clarke methodology",
+  title: "Reliability-Quantified Thematic Analyzer",
+  description:
+    "Ensemble thematic analysis with dual reliability metrics (Cohen's kappa + cosine similarity) and consensus extraction.",
 };
 
 export default function RootLayout({
@@ -16,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

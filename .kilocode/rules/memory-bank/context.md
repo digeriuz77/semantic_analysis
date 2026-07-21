@@ -1,87 +1,73 @@
-# Active Context: Next.js Starter Template
+# Active Context: Semantic & Thematic Analyzer
 
 ## Current State
 
-**Template Status**: ✅ Ready for development
+**App:** Evolved from a single-shot theme extractor into a **reliability-quantified ensemble** thematic analyzer. The headline flow now runs N reproducible seeded LLM runs per document and reports dual reliability metrics (Cohen's κ + cosine) with confidence-tiered consensus themes. The legacy single-run `/api/analyze` route is kept but unused by the UI; the new `/api/analyze-ensemble` is the primary path. A demo mode (deterministic mock themes) keeps the dashboard explorable without an LLM key.
 
-The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. It's ready for AI-assisted expansion to build any type of application.
+**Phases 0 and 1 are COMPLETE** (see `.kilocode/roadmap.md`). Next: Phase 2 (multi-provider adapters + custom prompts + model compare).
+
+## What the three sources contribute
+
+| Source | Contribution |
+|--------|--------------|
+| **Reliability paper** (LLM-Thematic-Analysis-Tool) | Technical core: ensemble of 6 seeded runs, dual metrics (Cohen's κ + cosine over all-MiniLM-L6-v2), configurable seeds/temp, `{seed}`/`{text_chunk}` prompts, structure-agnostic consensus, multi-model. Baselines: κ≈0.84-0.91, cosine≈92-95%. |
+| **qualitative-research-skill repo** | Methodological backbone: paradigm-first logic (don't force κ for constructivist work → use Lincoln & Guba trustworthiness), Braun & Clarke 6-step TA + grounded-theory 3-level coding, COREQ 32-item checklist, theoretical saturation, reusable κ calculator + templates. |
+| **Qualitative-Text-Datasets-for-UX-Research repo** | Demo corpus + test fixtures: interviews, surveys, focus groups, diary studies, feedback, forums → in-app gallery + integration tests + dataset-type methodology hints. |
 
 ## Recently Completed
 
-- [x] Base Next.js 16 setup with App Router
-- [x] TypeScript configuration with strict mode
-- [x] Tailwind CSS 4 integration
-- [x] ESLint configuration
-- [x] Memory bank documentation
-- [x] Recipe system for common features
-
-## Current Structure
-
-| File/Directory | Purpose | Status |
-|----------------|---------|--------|
-| `src/app/page.tsx` | Home page | ✅ Ready |
-| `src/app/layout.tsx` | Root layout | ✅ Ready |
-| `src/app/globals.css` | Global styles | ✅ Ready |
-| `.kilocode/` | AI context & recipes | ✅ Ready |
+- [x] Reviewed current codebase (API routes, components, fireworks.ts, nlp_service/main.py)
+- [x] Reviewed both GitHub repos and the reliability article
+- [x] Authored master plan → `.kilocode/roadmap.md` (target architecture + 5-phase roadmap + decisions + risks + definition of done)
+- [x] Updated `architecture.md` to capture current + target patterns
+- [x] **Phase 0 — foundation:** migrated Tailwind to v4 `@theme` (navy/gold colors now compile; removed v3 `tailwind.config.ts`); seeded `public/datasets/` (interview, survey, teaching-reflection + `index.json`); removed build-time Google Fonts dependency (system font stack); NLP-down resilience via structured 503 `NLP_UNAVAILABLE` error.
+- [x] **Phase 1 — reliability core:** Python `reliability.py` (embed → Union-Find cluster → consensus → Cohen's κ + run-centroid cosine); `/reliability` + `/embed` endpoints; VADER sentiment (NLTK built-in); TS `ChatAdapter` abstraction (`src/lib/llm/`) + ensemble runner (`ensemble.ts`) + prompt engine (`prompts.ts`) + demo generator (`demo.ts`) + NLP client (`nlp.ts`); orchestrator `/api/analyze-ensemble`; UI `AnalysisConfigurator` + `EnsembleDashboard` (κ band, cosine heatmap, consensus tiers, per-run view); rewired analyzer page (upload → configure → results); retired legacy `Dashboard.tsx`.
+- [x] Verified: `bun typecheck` ✓, `bun lint` ✓, `bun build` ✓ (all routes register incl. `ƒ /api/analyze-ensemble`); demo engine smoke-tested (6 runs → 4 consensus themes).
 
 ## Current Focus
 
-The template is ready. Next steps depend on user requirements:
+Phases 0–1 complete and verified. Next is **Phase 2** (multi-provider `ChatAdapter` modules for OpenAI/Anthropic/Gemini/OpenRouter + custom-prompt editor with `{seed}`/`{text_chunk}` + head-to-head ModelCompare view). Then Phase 3 (methodology: paradigm selection, frameworks library, COREQ, saturation).
 
-1. What type of application to build
-2. What features are needed
-3. Design/branding preferences
+## Verification notes (sandbox limitations)
+- No `pip` in the sandbox → the Python reliability engine (`reliability.py`) is syntax-verified + logic-reviewed but not runtime-tested here; it runs in its own venv per the README. It degrades gracefully (TF-IDF when `sentence-transformers` absent).
+- Port 3000 is served by the sandbox proxy which 404s API POST routes (even pre-existing `/api/analyze`), so API routes can't be curl-tested here. Build output confirms `ƒ /api/analyze-ensemble` is registered; the pure-TS demo engine was smoke-tested directly.
 
-## Quick Start Guide
+## Phase Summary (full detail in `.kilocode/roadmap.md`)
+- **Phase 0** — Foundation: reconcile Tailwind, normalize env/keys, NLP-resilience, lint/typecheck gate, seed demo datasets.
+- **Phase 1** — Reliability core: Python `/embed` `/kappa` `/sentiment` `/consensus`; `/api/analyze-ensemble` `/api/reliability` `/api/consensus`; ReliabilityDashboard + ConsensusThemes + AnalysisConfigurator.
+- **Phase 2** — Multi-provider `ChatAdapter` + custom prompts + ModelCompare.
+- **Phase 3** — Methodology: ResearchDesign (paradigm+method), frameworks library, COREQ, saturation.
+- **Phase 4** — DatasetGallery, Export/manifest, cross-model ensemble, adaptive runs.
+- **Phase 5** — Persistence via add-database recipe (optional).
 
-### To add a new page:
+## Decisions locked in the plan
+- D1: κ/cosine computed **server-side** in the Python service (reuse FastAPI; no heavy WASM in browser).
+- D2: **Unified `ChatAdapter`**; all keys server-side only.
+- D3: Schön lens **kept and generalized** into a frameworks library; not deleted.
+- D4: **Paradigm-aware** metrics (trustworthiness vs κ).
+- D5: **Defer DB** to Phase 5; use session + localStorage meanwhile.
 
-Create a file at `src/app/[route]/page.tsx`:
-```tsx
-export default function NewPage() {
-  return <div>New page content</div>;
-}
-```
-
-### To add components:
-
-Create `src/components/` directory and add components:
-```tsx
-// src/components/ui/Button.tsx
-export function Button({ children }: { children: React.ReactNode }) {
-  return <button className="px-4 py-2 bg-blue-600 text-white rounded">{children}</button>;
-}
-```
-
-### To add a database:
-
-Follow `.kilocode/recipes/add-database.md`
-
-### To add API routes:
-
-Create `src/app/api/[route]/route.ts`:
-```tsx
-import { NextResponse } from "next/server";
-
-export async function GET() {
-  return NextResponse.json({ message: "Hello" });
-}
-```
-
-## Available Recipes
-
-| Recipe | File | Use Case |
-|--------|------|----------|
-| Add Database | `.kilocode/recipes/add-database.md` | Data persistence with Drizzle + SQLite |
-
-## Pending Improvements
-
-- [ ] Add more recipes (auth, email, etc.)
-- [ ] Add example components
-- [ ] Add testing setup recipe
+## Key files to know
+| File | Purpose |
+|------|---------|
+| `src/app/api/analyze-ensemble/route.ts` | **primary** orchestrator: NLP → ensemble runs → reliability |
+| `src/lib/ensemble.ts` | runs N seeded LLM calls in parallel |
+| `src/lib/llm/` | `ChatAdapter` abstraction + Fireworks adapter + registry |
+| `src/lib/nlp.ts` | Python `/process` + `/reliability` client (raises `NlpUnavailableError`) |
+| `src/lib/demo.ts` | deterministic no-key demo ensemble |
+| `src/lib/kappa.ts` | Landis-Koch band labels/colors + helpers |
+| `src/components/AnalysisConfigurator.tsx` | seeds/temp/threshold/model config UI |
+| `src/components/EnsembleDashboard.tsx` | reliability + consensus + per-run dashboard |
+| `src/types/index.ts` | RunConfig, ReliabilityReport, ConsensusTheme, EnsembleResult |
+| `nlp_service/reliability.py` | embed + cluster + consensus + κ + cosine |
+| `nlp_service/main.py` | `/process` `/reliability` `/embed` `/health`; VADER sentiment |
+| `src/app/api/analyze/route.ts` | legacy single-run route (kept, unused by UI) |
+| `src/lib/fireworks.ts` | legacy single-provider client + JSON/theme sanitizers (still reused) |
+| `.kilocode/roadmap.md` | **master plan** |
 
 ## Session History
 
 | Date | Changes |
 |------|---------|
-| Initial | Template created with base setup |
+| 2026-07-21 | Architect review: diagnosed current app, synthesized 3 sources, authored roadmap + updated architecture/context memory banks. |
+| 2026-07-21 | Implemented Phase 0 (Tailwind v4 migration, datasets, font/resilience hardening) and Phase 1 (reliability core: Python engine + orchestrator route + configurator/dashboard UI + ensemble flow). typecheck/lint/build green. |

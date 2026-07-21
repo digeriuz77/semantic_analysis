@@ -130,7 +130,7 @@ export function FileUpload({ onFilesSelected }: FileUploadProps) {
             onClick={handleSubmit}
             className="mt-6 w-full py-3 px-4 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg transform transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
-            Start Analysis
+            Continue → Configure
           </button>
         </div>
       )}
