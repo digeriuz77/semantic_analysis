@@ -6,7 +6,10 @@ import type {
   EnsembleResult,
   KappaBand,
   Theme,
+  ThemeAnnotation,
 } from "@/types";
+import { ThemeLineageView } from "@/components/ThemeLineageView";
+import { useAnnotations } from "@/lib/useAnnotations";
 import {
   BarChart,
   Bar,
@@ -25,6 +28,10 @@ import {
   Layers,
   AlertTriangle,
   CheckCircle2,
+  GitBranch,
+  Workflow,
+  Flag,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -40,13 +47,34 @@ interface EnsembleDashboardProps {
   onReset: () => void;
 }
 
-type Tab = "overview" | "reliability" | "consensus" | "runs";
+type Tab = "overview" | "reliability" | "consensus" | "runs" | "pipeline";
 const CHART_COLORS = ["#0d9488", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#10b981"];
 
 export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) {
   const [activeFile, setActiveFile] = useState(0);
   const [tab, setTab] = useState<Tab>("reliability");
+  const [selectedThemeIdx, setSelectedThemeIdx] = useState<number | null>(null);
   const result = results[activeFile];
+  const { annotations, annotate } = useAnnotations(result.id);
+
+  // Lineage drill-down view takes over the panel.
+  if (selectedThemeIdx !== null) {
+    const theme = result.reliability.consensus.themes[selectedThemeIdx];
+    if (theme) {
+      return (
+        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+          <ThemeLineageView
+            theme={theme}
+            themeIndex={selectedThemeIdx}
+            runSeeds={result.runs.map((r) => r.seed)}
+            annotation={annotations[theme.label]}
+            onAnnotate={annotate}
+            onBack={() => setSelectedThemeIdx(null)}
+          />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -111,12 +139,22 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
           <TabButton active={tab === "runs"} onClick={() => setTab("runs")}>
             Per-Run
           </TabButton>
+          <TabButton active={tab === "pipeline"} onClick={() => setTab("pipeline")}>
+            <Workflow size={15} className="inline mr-1" /> Pipeline Trace
+          </TabButton>
         </div>
 
         {tab === "reliability" && <ReliabilityTab result={result} />}
-        {tab === "consensus" && <ConsensusTab result={result} />}
+        {tab === "consensus" && (
+          <ConsensusTab
+            result={result}
+            annotations={annotations}
+            onSelectTheme={setSelectedThemeIdx}
+          />
+        )}
         {tab === "overview" && <OverviewTab result={result} />}
         {tab === "runs" && <RunsTab result={result} />}
+        {tab === "pipeline" && <PipelineTab result={result} />}
       </div>
     </div>
   );
@@ -308,10 +346,22 @@ function Row({
 
 // ---------------------------------------------------------------------------
 
-function ConsensusTab({ result }: { result: EnsembleResult }) {
+function ConsensusTab({
+  result,
+  annotations,
+  onSelectTheme,
+}: {
+  result: EnsembleResult;
+  annotations: Record<string, ThemeAnnotation>;
+  onSelectTheme: (idx: number) => void;
+}) {
   const themes: ConsensusTheme[] = result.reliability.consensus.themes;
+  const allThemes = result.reliability.consensus.themes;
   const high = themes.filter((t) => t.tier === "high");
   const moderate = themes.filter((t) => t.tier === "moderate");
+
+  const indexByLabel = (label: string) =>
+    allThemes.findIndex((t) => t.label === label);
 
   if (themes.length === 0) {
     return (
@@ -324,15 +374,25 @@ function ConsensusTab({ result }: { result: EnsembleResult }) {
 
   return (
     <div className="space-y-6">
+      <p className="text-xs text-slate-500">
+        Click any theme to inspect its derivation lineage, evidence, and record a
+        researcher annotation.
+      </p>
       <ThemeGroup
         title="High confidence"
         subtitle={`Appears in ≥83% of runs (${result.reliability.runCount})`}
         themes={high}
+        allThemes={allThemes}
+        annotations={annotations}
+        onSelectTheme={onSelectTheme}
       />
       <ThemeGroup
         title="Moderate confidence"
         subtitle={`Appears in 50–66% of runs — warrants researcher review`}
         themes={moderate}
+        allThemes={allThemes}
+        annotations={annotations}
+        onSelectTheme={onSelectTheme}
       />
     </div>
   );
@@ -342,10 +402,16 @@ function ThemeGroup({
   title,
   subtitle,
   themes,
+  allThemes,
+  annotations,
+  onSelectTheme,
 }: {
   title: string;
   subtitle: string;
   themes: ConsensusTheme[];
+  allThemes: ConsensusTheme[];
+  annotations: Record<string, ThemeAnnotation>;
+  onSelectTheme: (idx: number) => void;
 }) {
   if (themes.length === 0) return null;
   return (
@@ -355,23 +421,50 @@ function ThemeGroup({
         <p className="text-slate-500 text-xs">{subtitle}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {themes.map((theme, idx) => (
-          <ConsensusCard key={idx} theme={theme} />
-        ))}
+        {themes.map((theme) => {
+          const idx = allThemes.findIndex((t) => t.label === theme.label);
+          return (
+            <ConsensusCard
+              key={theme.label}
+              theme={theme}
+              annotation={annotations[theme.label]}
+              onClick={() => onSelectTheme(idx)}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ConsensusCard({ theme }: { theme: ConsensusTheme }) {
+const ANNO_ICON: Record<ThemeAnnotation["status"], { Icon: LucideIcon; color: string; label: string }> = {
+  accepted: { Icon: CheckCircle2, color: "#0d9488", label: "Accepted" },
+  rejected: { Icon: XCircle, color: "#ef4444", label: "Rejected" },
+  flagged: { Icon: Flag, color: "#f59e0b", label: "Flagged" },
+};
+
+function ConsensusCard({
+  theme,
+  annotation,
+  onClick,
+}: {
+  theme: ConsensusTheme;
+  annotation?: ThemeAnnotation;
+  onClick: () => void;
+}) {
   const color = tierColor(theme.tier);
+  const anno = annotation ? ANNO_ICON[annotation.status] : null;
   return (
-    <div
-      className="bg-slate-800/50 border rounded-lg p-5"
+    <button
+      onClick={onClick}
+      className="text-left w-full bg-slate-800/50 border rounded-lg p-5 hover:border-teal-500/60 hover:bg-slate-800 transition-colors cursor-pointer group"
       style={{ borderColor: `${color}55` }}
     >
       <div className="flex justify-between items-start mb-3 gap-3">
-        <h3 className="text-lg font-bold text-white">{theme.label}</h3>
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          {theme.label}
+          <GitBranch size={14} className="text-slate-600 group-hover:text-teal-400 transition-colors" />
+        </h3>
         <span
           className="text-xs px-2 py-1 rounded-full border whitespace-nowrap"
           style={{ color, borderColor: color, backgroundColor: `${color}22` }}
@@ -391,19 +484,32 @@ function ConsensusCard({ theme }: { theme: ConsensusTheme }) {
           {Math.round(theme.consistency * 100)}%
         </span>
       </div>
-      {theme.keywords.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {theme.keywords.map((kw, i) => (
-            <span
-              key={i}
-              className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded"
-            >
-              {kw}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+      <div className="flex items-center justify-between gap-2">
+        {theme.keywords.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {theme.keywords.slice(0, 4).map((kw, i) => (
+              <span
+                key={i}
+                className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded"
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span />
+        )}
+        {anno && (
+          <span
+            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap"
+            style={{ color: anno.color, borderColor: anno.color, backgroundColor: `${anno.color}22` }}
+            title={annotation?.note}
+          >
+            <anno.Icon size={11} /> {anno.label}
+          </span>
+        )}
+      </div>
+    </button>
   );
 }
 
@@ -443,36 +549,143 @@ function OverviewTab({ result }: { result: EnsembleResult }) {
 }
 
 function RunsTab({ result }: { result: EnsembleResult }) {
+  const [openRaw, setOpenRaw] = useState<number | null>(null);
   return (
     <div className="space-y-4">
-      {result.runs.map((run, i) => (
-        <div key={i} className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-mono text-slate-500">Run {i + 1}</span>
-            <span className="text-xs text-slate-600">·</span>
-            <span className="text-xs font-mono text-teal-400">seed {run.seed}</span>
-            <span className="text-xs text-slate-600">·</span>
-            <span className="text-xs text-slate-500">
-              {run.themes.length} theme{run.themes.length === 1 ? "" : "s"}
-            </span>
-          </div>
-          {run.themes.length === 0 ? (
-            <p className="text-slate-600 text-sm italic">No themes extracted.</p>
-          ) : (
-            <div className="space-y-2">
-              {run.themes.map((theme: Theme, j) => (
-                <div key={j} className="flex items-start gap-3">
-                  <CheckCircle2 size={14} className="text-teal-400 mt-1 flex-shrink-0" />
-                  <div>
-                    <span className="text-slate-200 text-sm font-medium">{theme.name}</span>
-                    <span className="text-slate-500 text-xs"> — {theme.description}</span>
-                  </div>
-                </div>
-              ))}
+      {result.runs.map((run, i) => {
+        const prov = run.provenance;
+        const status = prov?.status ?? "ok";
+        const statusColor =
+          status === "ok" ? "#0d9488" : status === "parse_failed" ? "#f59e0b" : "#ef4444";
+        return (
+          <div key={i} className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="text-xs font-mono text-slate-500">Run {i + 1}</span>
+              <span className="text-xs text-slate-600">·</span>
+              <span className="text-xs font-mono text-teal-400">seed {run.seed}</span>
+              <span className="text-xs text-slate-600">·</span>
+              <span className="text-xs text-slate-500">
+                {run.themes.length} theme{run.themes.length === 1 ? "" : "s"}
+              </span>
+              {prov && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded border font-mono"
+                  style={{ color: statusColor, borderColor: statusColor, backgroundColor: `${statusColor}22` }}
+                >
+                  {status}
+                </span>
+              )}
+              {prov && prov.rawResponse && (
+                <button
+                  onClick={() => setOpenRaw(openRaw === i ? null : i)}
+                  className="text-xs text-slate-500 hover:text-teal-400 ml-auto underline"
+                >
+                  {openRaw === i ? "hide raw output" : "show raw output"}
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      ))}
+
+            {prov?.error && (
+              <p className="text-red-400 text-xs mb-2 font-mono">{prov.error}</p>
+            )}
+
+            {run.themes.length === 0 ? (
+              <p className="text-slate-600 text-sm italic">No themes extracted.</p>
+            ) : (
+              <div className="space-y-2">
+                {run.themes.map((theme: Theme, j) => (
+                  <div key={j} className="flex items-start gap-3">
+                    <CheckCircle2 size={14} className="text-teal-400 mt-1 flex-shrink-0" />
+                    <div>
+                      <span className="text-slate-200 text-sm font-medium">{theme.name}</span>
+                      <span className="text-slate-500 text-xs"> — {theme.description}</span>
+                      {theme.supportingQuotes && theme.supportingQuotes.length > 0 && (
+                        <p className="text-slate-600 text-xs italic mt-0.5">
+                          “{theme.supportingQuotes[0]}”
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {openRaw === i && prov && (
+              <div className="mt-3 border-t border-slate-800 pt-3 space-y-2">
+                {prov.renderedPrompt && (
+                  <div>
+                    <p className="text-xs text-slate-600 font-mono mb-1">RENDERED PROMPT</p>
+                    <pre className="text-xs text-slate-500 whitespace-pre-wrap font-mono bg-slate-900/50 rounded p-2 max-h-40 overflow-y-auto">
+                      {prov.renderedPrompt.slice(0, 1200)}
+                      {prov.renderedPrompt.length > 1200 ? "…" : ""}
+                    </pre>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs text-slate-600 font-mono mb-1">RAW RESPONSE</p>
+                  <pre className="text-xs text-slate-500 whitespace-pre-wrap font-mono bg-slate-900/50 rounded p-2 max-h-60 overflow-y-auto">
+                    {prov.rawResponse.slice(0, 3000)}
+                    {prov.rawResponse.length > 3000 ? "…" : ""}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PipelineTab({ result }: { result: EnsembleResult }) {
+  const t = result.pipelineTrace;
+  if (!t) {
+    return <InfoBox>Pipeline trace unavailable (older analysis format).</InfoBox>;
+  }
+  const rows: { label: string; value: string; hint?: string }[] = [
+    { label: "Input size", value: `${t.inputChars.toLocaleString()} chars`, hint: "raw uploaded file" },
+    { label: "After cleaning", value: `${t.cleanedChars.toLocaleString()} chars`, hint: "NLTK preprocessing applied" },
+    { label: "Sent to LLM", value: `${t.chunkChars.toLocaleString()} chars`, hint: "truncated chunk per run" },
+    { label: "Preprocessing", value: t.preprocessed ? "tokenize · lemmatize · stopwords" : "none" },
+    { label: "Embedding backend", value: t.embeddingBackend, hint: "used for κ + cosine + evidence" },
+    { label: "Cosine threshold", value: t.cosineThreshold.toFixed(2), hint: "theme-equivalence cutoff" },
+    { label: "Min occurrence ratio", value: `${Math.round(t.minOccurrenceRatio * 100)}%`, hint: "consensus threshold" },
+    { label: "Temperature", value: t.temperature.toFixed(1), hint: "LLM sampling randomness" },
+    { label: "Seeds", value: t.seeds.join(", "), hint: `${t.seeds.length} independent runs` },
+  ];
+  return (
+    <div className="space-y-5">
+      <div>
+        <h4 className="text-white font-semibold mb-1">Pipeline Trace</h4>
+        <p className="text-slate-400 text-xs max-w-2xl">
+          Every transformation applied to your data, end to end. This is the
+          reproducibility record — combined with the per-run provenance, it lets
+          any reader trace exactly how each result was produced.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {rows.map((r, i) => (
+          <div key={i} className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500 uppercase tracking-wide">{r.label}</span>
+            </div>
+            <p className="text-slate-200 font-mono text-sm mt-1">{r.value}</p>
+            {r.hint && <p className="text-xs text-slate-600 mt-1">{r.hint}</p>}
+          </div>
+        ))}
+      </div>
+      <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+        <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">Manifest (for citation)</p>
+        <pre className="text-xs text-slate-400 whitespace-pre-wrap font-mono">{`fileName: ${result.fileName}
+provider: ${result.config.provider}
+model: ${result.config.model}
+seeds: [${t.seeds.join(", ")}]
+temperature: ${t.temperature}
+cosineThreshold: ${t.cosineThreshold}
+minOccurrenceRatio: ${t.minOccurrenceRatio}
+embeddingBackend: ${t.embeddingBackend}
+demoMode: ${result.demo}`}</pre>
+      </div>
     </div>
   );
 }

@@ -271,6 +271,56 @@ async def embed_endpoint(request: Request):
     }
 
 
+@app.post("/evidence")
+async def evidence_endpoint(request: Request):
+    """Retrieve supporting text spans from the source corpus for each theme.
+
+    Splits the source text into sentence-level units, embeds both the units and
+    the theme descriptions, and returns the top-k most semantically similar
+    source spans per theme. This grounds each theme in traceable evidence even
+    when the LLM did not return explicit quotes.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    source = str(body.get("text", ""))
+    themes = body.get("themes", [])
+    top_k = int(body.get("top_k", 3))
+    if not isinstance(themes, list) or not source:
+        return {"evidence": []}
+
+    units = [u.strip() for u in sent_tokenize(source) if len(u.strip()) > 25]
+    if not units or not themes:
+        empty: List[List[Dict[str, Any]]] = [[] for _ in themes] if isinstance(themes, list) else []
+        return {"evidence": empty}
+
+    theme_texts = [
+        (str(t.get("name", "")) + ". " + str(t.get("description", ""))).strip(". ")
+        for t in themes
+    ]
+    all_texts = units + theme_texts
+    vecs, _ = embed_texts(all_texts)
+    unit_vecs = vecs[: len(units)]
+    theme_vecs = vecs[len(units):]
+
+    evidence: List[List[Dict[str, Any]]] = []
+    for ti, theme_obj in enumerate(themes):
+        sims = theme_vecs[ti] @ unit_vecs.T
+        order = np.argsort(-sims)[:top_k]
+        spans = [
+            {
+                "text": units[idx],
+                "cosine": round(float(sims[idx]), 4),
+                "unitIndex": int(idx),
+            }
+            for idx in order
+            if float(sims[idx]) > 0
+        ]
+        evidence.append(spans)
+    return {"evidence": evidence}
+
+
 @app.get("/health")
 async def health_check():
     return {

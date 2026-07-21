@@ -129,19 +129,23 @@ def compute_reliability(
     # Flatten every theme from every run, remembering its origin.
     flat: List[Dict[str, Any]] = []
     for run_index, run in enumerate(runs):
+        seed = run.get("seed")
         for theme in run.get("themes", []) or []:
             name = str(theme.get("name", "")).strip()
             description = str(theme.get("description", "")).strip()
             keywords = theme.get("keywords", []) or []
+            quotes = theme.get("supporting_quotes") or theme.get("quotes") or []
             text = (name + ". " + description).strip(". ") or name or description
             if not text:
                 continue
             flat.append(
                 {
                     "run": run_index,
+                    "seed": seed,
                     "name": name,
                     "description": description,
                     "keywords": [str(k) for k in keywords if str(k).strip()],
+                    "quotes": [str(q) for q in quotes if str(q).strip()],
                     "text": text,
                 }
             )
@@ -204,6 +208,26 @@ def compute_reliability(
                 if key not in seen:
                     seen.add(key)
                     keyword_set.append(kw)
+
+        # Lineage: per-member provenance + the cosine that bound it to the cluster.
+        # This is the audit trail that makes a consensus theme's derivation
+        # inspectable case-by-case (which runs/seeds agreed, how strongly).
+        member_lineage: List[Dict[str, Any]] = []
+        for m in sorted(members, key=lambda x: flat[x]["run"]):
+            cosine_to_medoid = round(float(sim[m, medoid]), 4) if m != medoid else 1.0
+            member_lineage.append(
+                {
+                    "runIndex": flat[m]["run"],
+                    "seed": flat[m].get("seed"),
+                    "name": flat[m]["name"],
+                    "description": flat[m]["description"],
+                    "keywords": flat[m]["keywords"][:6],
+                    "quotes": flat[m]["quotes"][:3],
+                    "cosineToMedoid": cosine_to_medoid,
+                    "isMedoid": m == medoid,
+                }
+            )
+
         consensus_themes.append(
             {
                 "label": rep["name"] or rep["description"][:60] or "Untitled theme",
@@ -214,6 +238,8 @@ def compute_reliability(
                 "consistency": round(consistency, 4),
                 "tier": "high" if consistency >= 0.83 else "moderate",
                 "memberCount": len(members),
+                "runsPresent": runs_present,
+                "lineage": member_lineage,
             }
         )
     consensus_themes.sort(

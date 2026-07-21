@@ -2,9 +2,9 @@
 
 ## Current State
 
-**App:** Evolved from a single-shot theme extractor into a **reliability-quantified ensemble** thematic analyzer. The headline flow now runs N reproducible seeded LLM runs per document and reports dual reliability metrics (Cohen's κ + cosine) with confidence-tiered consensus themes. The legacy single-run `/api/analyze` route is kept but unused by the UI; the new `/api/analyze-ensemble` is the primary path. A demo mode (deterministic mock themes) keeps the dashboard explorable without an LLM key.
+**App:** A **reliability-quantified ensemble** thematic analyzer with a full **explainability layer**. The headline flow runs N reproducible seeded LLM runs, reports dual reliability metrics (Cohen's κ + cosine) with confidence-tiered consensus themes, and now exposes case-by-case auditability: per-theme derivation lineage, evidence grounding (LLM quotes + retrieved source spans), per-run provenance (raw output, rendered prompt, parse status), a pipeline trace, and researcher annotations persisted to localStorage. The legacy single-run `/api/analyze` route is kept but unused. Demo mode keeps everything explorable without an LLM key.
 
-**Phases 0, 1, and 2 are COMPLETE** (see `.kilocode/roadmap.md`). Next: Phase 3 (methodology: paradigm selection, frameworks library, COREQ, saturation).
+**Phases 0, 1, 2, and 2.5 are COMPLETE** (see `.kilocode/roadmap.md`). Next: Phase 3 (methodology: paradigm selection, frameworks library, COREQ, saturation).
 
 ## What the three sources contribute
 
@@ -24,10 +24,11 @@
 - [x] **Phase 1 — reliability core:** Python `reliability.py` (embed → Union-Find cluster → consensus → Cohen's κ + run-centroid cosine); `/reliability` + `/embed` endpoints; VADER sentiment (NLTK built-in); TS `ChatAdapter` abstraction (`src/lib/llm/`) + ensemble runner (`ensemble.ts`) + prompt engine (`prompts.ts`) + demo generator (`demo.ts`) + NLP client (`nlp.ts`); orchestrator `/api/analyze-ensemble`; UI `AnalysisConfigurator` + `EnsembleDashboard` (κ band, cosine heatmap, consensus tiers, per-run view); rewired analyzer page (upload → configure → results); retired legacy `Dashboard.tsx`.
 - [x] Verified: `bun typecheck` ✓, `bun lint` ✓, `bun build` ✓ (all routes register incl. `ƒ /api/analyze-ensemble`); demo engine smoke-tested (6 runs → 4 consensus themes).
 - [x] **Phase 2 — multi-provider + custom prompts + model compare:** 4 new `ChatAdapter` modules (OpenAI, Anthropic Messages API, Gemini, OpenRouter) + provider metadata (`src/lib/providers.ts`); `/api/providers` endpoint reports configured providers (keys never leak); custom prompt editor with live `{seed}`/`{text_chunk}` preview in `AnalysisConfigurator`; cross-model `/api/compare-models` endpoint (process file once → run ensemble per model in parallel → per-model κ/cosine/consensus); `ModelCompareView` with comparison table (best-model highlight, κ bands, consensus counts); wired Compare view + nav into analyzer page.
+- [x] **Phase 2.5 — explainability core (case-by-case transparency):** Python reliability engine now emits per-consensus-theme `lineage` (members w/ run index, seed, name/desc, keywords, quotes, cosine-to-medoid, medoid flag) + `runsPresent`; new Python `/evidence` endpoint embeds source sentences + themes, returns top-k supporting spans; prompt now requests `supporting_quotes` (sanitizer captures them); ensemble runner captures full `RunProvenance` (raw response, rendered prompt, parse status) instead of discarding it; orchestrator enriches consensus with evidence + builds `PipelineTrace`; `ThemeLineageView` (lineage members, LLM quotes + retrieved spans, annotation editor accept/reject/flag + note); `useAnnotations` hook (localStorage); consensus cards now clickable + show annotation status; RunsTab shows provenance + raw-output toggle; new Pipeline Trace tab (transformations + manifest).
 
 ## Current Focus
 
-Phases 0–2 complete and verified. Next is **Phase 3** (methodology: paradigm selection — constructivist vs post-positivist; analytical frameworks library with Braun & Clarke reflexive TA, grounded theory, content analysis; COREQ 32-item checklist; theoretical-saturation heuristic).
+Phases 0–2.5 complete and verified. Next is **Phase 3** (methodology: paradigm selection — constructivist vs post-positivist; analytical frameworks library with Braun & Clarke reflexive TA, grounded theory, content analysis; COREQ 32-item checklist; theoretical-saturation heuristic).
 
 ## Verification notes (sandbox limitations)
 - No `pip` in the sandbox → the Python reliability engine (`reliability.py`) is syntax-verified + logic-reviewed but not runtime-tested here; it runs in its own venv per the README. It degrades gracefully (TF-IDF when `sentence-transformers` absent).
@@ -77,3 +78,4 @@ Phases 0–2 complete and verified. Next is **Phase 3** (methodology: paradigm s
 | 2026-07-21 | Architect review: diagnosed current app, synthesized 3 sources, authored roadmap + updated architecture/context memory banks. |
 | 2026-07-21 | Implemented Phase 0 (Tailwind v4 migration, datasets, font/resilience hardening) and Phase 1 (reliability core: Python engine + orchestrator route + configurator/dashboard UI + ensemble flow). typecheck/lint/build green. |
 | 2026-07-21 | Implemented Phase 2 (4 new provider adapters + custom prompt editor with live preview + cross-model compare endpoint + ModelCompareView). typecheck/lint/build green; 2 new routes registered. |
+| 2026-07-21 | Implemented Phase 2.5 explainability core in response to "how is data processed case-by-case" concern: per-theme lineage in reliability engine, /evidence endpoint, full run provenance, ThemeLineageView + annotation persistence (localStorage), pipeline trace tab. typecheck/lint/build green. |

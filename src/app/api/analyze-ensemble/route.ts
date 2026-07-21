@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { callReliability, processFileViaNlp, NlpUnavailableError } from "@/lib/nlp";
-import { runThematicEnsemble } from "@/lib/ensemble";
+import {
+  callReliability,
+  enrichConsensusWithEvidence,
+  processFileViaNlp,
+  NlpUnavailableError,
+} from "@/lib/nlp";
+import { runThematicEnsemble, getTextChunkLength } from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
-import type { EnsembleResult, LlmProvider, RunConfig } from "@/types";
+import type { EnsembleResult, LlmProvider, PipelineTrace, RunConfig } from "@/types";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CLIENT_TEXT_CHARS = 8000;
@@ -38,7 +43,9 @@ function parseNumber(
  * Orchestrates a reproducible ensemble analysis for one document:
  *   1. Python /process  -> cleaning, NLTK stats, VADER sentiment, keywords
  *   2. N parallel LLM runs (one per seed), or deterministic demo runs if no key
- *   3. Python /reliability -> Cohen's kappa + cosine + consensus themes
+ *   3. Python /reliability -> Cohen's kappa + cosine + consensus themes (w/ lineage)
+ *   4. Python /evidence -> supporting source spans per consensus theme
+ *   5. Pipeline trace assembled for full transparency.
  * Returns a single EnsembleResult the dashboard renders directly.
  */
 export async function POST(request: NextRequest) {
@@ -90,11 +97,14 @@ export async function POST(request: NextRequest) {
       promptTemplate,
     };
 
+    const inputChars = file.size;
+
     // 1. NLP preprocessing (server-side; file never reaches the browser raw).
     const nlp = await processFileViaNlp(file);
     const sentiment = nlp.sentiment ?? { positive: 33, neutral: 34, negative: 33 };
+    const cleanedText = nlp.cleaned_text.slice(0, MAX_CLIENT_TEXT_CHARS);
 
-    // 2. Ensemble runs.
+    // 2. Ensemble runs (each carries full provenance).
     let demo = false;
     const runs = isProviderConfigured(provider)
       ? await runThematicEnsemble({ text: nlp.cleaned_text, config })
@@ -103,11 +113,27 @@ export async function POST(request: NextRequest) {
           return generateDemoRuns(nlp.top_keywords, seeds);
         })();
 
-    // 3. Reliability + consensus (dual metrics).
+    // 3. Reliability + consensus with per-theme lineage.
     const reliability = await callReliability(runs, {
       cosineThreshold,
       minOccurrenceRatio,
     });
+
+    // 4. Evidence grounding: retrieve supporting source spans per consensus theme.
+    await enrichConsensusWithEvidence(cleanedText, reliability.consensus.themes);
+
+    // 5. Pipeline trace for transparency/auditability.
+    const pipelineTrace: PipelineTrace = {
+      inputChars,
+      cleanedChars: nlp.cleaned_text.length,
+      chunkChars: getTextChunkLength(nlp.cleaned_text),
+      preprocessed: true,
+      embeddingBackend: reliability.embeddingBackend,
+      cosineThreshold,
+      minOccurrenceRatio,
+      temperature,
+      seeds,
+    };
 
     const result: EnsembleResult = {
       id: uuidv4(),
@@ -121,9 +147,10 @@ export async function POST(request: NextRequest) {
       },
       sentiment,
       wordFrequency: nlp.top_keywords,
-      cleanedText: nlp.cleaned_text.slice(0, MAX_CLIENT_TEXT_CHARS),
+      cleanedText,
       runs,
       reliability,
+      pipelineTrace,
       demo,
     };
 
