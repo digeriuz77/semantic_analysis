@@ -5,11 +5,14 @@ import type {
   ConsensusTheme,
   EnsembleResult,
   KappaBand,
+  SaturationPoint,
   Theme,
   ThemeAnnotation,
 } from "@/types";
+import type { Paradigm } from "@/lib/paradigms";
 import { ThemeLineageView } from "@/components/ThemeLineageView";
 import { useAnnotations } from "@/lib/useAnnotations";
+import { PARADIGMS } from "@/lib/paradigms";
 import {
   BarChart,
   Bar,
@@ -163,7 +166,10 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
 // ---------------------------------------------------------------------------
 
 function ReliabilityTab({ result }: { result: EnsembleResult }) {
-  const { kappa, cosine, embeddingBackend, runCount } = result.reliability;
+  const { kappa, cosine, embeddingBackend, runCount, saturation } = result.reliability;
+  const paradigmId = result.config.paradigm;
+  const paradigm = paradigmId ? PARADIGMS[paradigmId] : null;
+  const foregroundKappa = paradigm ? paradigm.foregroundKappa : true;
 
   if (runCount < 2) {
     return (
@@ -176,8 +182,19 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
 
   return (
     <div className="space-y-6">
+      {/* Paradigm-aware quality criteria (constructivist → trustworthiness first) */}
+      {paradigm && !foregroundKappa && (
+        <TrustworthinessCard paradigm={paradigm} hasKappa={Boolean(kappa)} />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <MetricCard title="Cohen's Kappa (κ)">
+        <MetricCard
+          title={
+            paradigm && !paradigm.kappaAppropriate
+              ? "Cohen's Kappa (κ) — supplementary"
+              : "Cohen's Kappa (κ)"
+          }
+        >
           {kappa ? (
             <KappaDisplay kappa={kappa} />
           ) : (
@@ -200,12 +217,118 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
 
       {cosine?.matrix && <CosineHeatmap matrix={cosine.matrix} seeds={result.runs.map((r) => r.seed)} />}
 
+      {saturation && saturation.length > 0 && (
+        <SaturationCard points={saturation} runCount={runCount} />
+      )}
+
       <p className="text-xs text-slate-500">
         Embedding backend:{" "}
         <span className="text-slate-300 font-mono">{embeddingBackend}</span>. κ
         uses theme presence/absence (Landis &amp; Koch bands); cosine uses
         run-centroid similarity over theme embeddings.
+        {paradigm && !paradigm.kappaAppropriate && (
+          <>
+            {" "}
+            <span className="text-amber-400/80">
+              Note: κ is shown as supplementary — your {paradigm.label.toLowerCase()}{" "}
+              paradigm foregrounds trustworthiness criteria above.
+            </span>
+          </>
+        )}
       </p>
+    </div>
+  );
+}
+
+function TrustworthinessCard({
+  paradigm,
+  hasKappa,
+}: {
+  paradigm: Paradigm;
+  hasKappa: boolean;
+}) {
+  return (
+    <div className="bg-gradient-to-r from-teal-900/20 to-slate-900/20 border border-teal-700/40 rounded-xl p-6">
+      <div className="flex items-center gap-2 mb-3">
+        <ShieldCheck size={18} className="text-teal-400" />
+        <h4 className="text-white font-semibold">
+          {paradigm.label} quality criteria
+        </h4>
+      </div>
+      <p className="text-slate-400 text-xs mb-4 max-w-2xl">
+        Your paradigm foregrounds these criteria over inter-rater κ. The
+        pipeline trace, per-theme lineage, and annotations directly support
+        dependability and confirmability.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {paradigm.qualityCriteria.map((c) => (
+          <div key={c.id} className="bg-slate-950/50 border border-slate-800 rounded-lg p-3">
+            <p className="text-teal-300 text-sm font-medium">{c.name}</p>
+            <p className="text-slate-500 text-xs mt-1">{c.description}</p>
+          </div>
+        ))}
+      </div>
+      {hasKappa && (
+        <p className="text-xs text-slate-500 mt-3">
+          κ is computed and shown below as supplementary information only.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SaturationCard({
+  points,
+  runCount,
+}: {
+  points: SaturationPoint[];
+  runCount: number;
+}) {
+  const maxClasses = Math.max(...points.map((p) => p.distinctClasses), 1);
+  const lastNew = points[points.length - 1]?.newClasses ?? 0;
+  const plateaued = lastNew === 0 && runCount >= 3;
+  const chartData = points.map((p) => ({
+    name: `${p.runsIncluded}`,
+    classes: p.distinctClasses,
+    new: p.newClasses,
+  }));
+
+  return (
+    <div className="bg-slate-950 border border-slate-800 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+        <h4 className="text-white font-semibold text-sm flex items-center gap-2">
+          <TrendingUp size={16} className="text-teal-400" />
+          Theoretical saturation curve
+        </h4>
+        <span
+          className={`text-xs px-2 py-0.5 rounded-full border ${
+            plateaued
+              ? "text-teal-400 border-teal-600 bg-teal-900/30"
+              : "text-amber-400 border-amber-700 bg-amber-900/20"
+          }`}
+        >
+          {plateaued
+            ? "Saturation likely reached"
+            : "New themes still emerging"}
+        </span>
+      </div>
+      <p className="text-slate-500 text-xs mb-4 max-w-2xl">
+        Distinct theme classes discovered as runs accumulate. Saturation is a
+        process, not a fixed number — when additional runs add no new classes,
+        the analysis has likely saturated.
+      </p>
+      <div className="h-40">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+            <XAxis dataKey="name" stroke="#64748b" fontSize={11} label={{ value: "runs", position: "insideBottom", dy: 12, fontSize: 10, fill: "#64748b" }} />
+            <YAxis stroke="#64748b" fontSize={11} domain={[0, Math.ceil(maxClasses * 1.1)]} />
+            <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc", fontSize: 12 }} />
+            <Bar dataKey="classes" name="distinct classes" fill="#0d9488" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="new" name="new classes" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

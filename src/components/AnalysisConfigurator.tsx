@@ -90,14 +90,25 @@ export function AnalysisConfigurator({
     "[your document text appears here…]"
   ).slice(0, 400);
 
+  const designLabel =
+    config.paradigm && config.framework
+      ? `${config.paradigm.replace("_", " ")} · ${config.framework.replace("_", " ")}`
+      : null;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500">
       <button
         onClick={onBack}
         className="text-slate-400 hover:text-white transition-colors text-sm"
       >
-        ← Back to upload
+        ← Back to research design
       </button>
+
+      {designLabel && (
+        <div className="text-xs text-slate-500 -mt-2">
+          Research design: <span className="text-teal-400">{designLabel}</span>
+        </div>
+      )}
 
       {/* Files */}
       <section className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">

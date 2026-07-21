@@ -9,7 +9,14 @@ import {
 import { runThematicEnsemble, getTextChunkLength } from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
-import type { EnsembleResult, LlmProvider, PipelineTrace, RunConfig } from "@/types";
+import type {
+  EnsembleResult,
+  FrameworkId,
+  LlmProvider,
+  ParadigmId,
+  PipelineTrace,
+  RunConfig,
+} from "@/types";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CLIENT_TEXT_CHARS = 8000;
@@ -86,6 +93,8 @@ export async function POST(request: NextRequest) {
     );
     const promptTemplate =
       (formData.get("promptTemplate") as string | null) || undefined;
+    const paradigm = (formData.get("paradigm") as ParadigmId | null) || undefined;
+    const framework = (formData.get("framework") as FrameworkId | null) || undefined;
 
     const config: RunConfig = {
       seeds,
@@ -95,6 +104,8 @@ export async function POST(request: NextRequest) {
       cosineThreshold,
       minOccurrenceRatio,
       promptTemplate,
+      paradigm,
+      framework,
     };
 
     const inputChars = file.size;
@@ -133,6 +144,8 @@ export async function POST(request: NextRequest) {
       minOccurrenceRatio,
       temperature,
       seeds,
+      paradigm,
+      framework,
     };
 
     const result: EnsembleResult = {

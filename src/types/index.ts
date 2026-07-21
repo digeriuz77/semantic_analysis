@@ -56,6 +56,18 @@ export interface NLPStats {
 
 export type LlmProvider = "fireworks" | "openai" | "anthropic" | "gemini" | "openrouter";
 
+/** Epistemological paradigm, drives which validity criteria are surfaced. */
+export type ParadigmId = "constructivist" | "post_positivist" | "critical" | "pragmatic";
+
+/** Analytical methodology/framework selected by the researcher. */
+export type FrameworkId =
+  | "reflexive_ta"
+  | "grounded_theory"
+  | "content_analysis"
+  | "phenomenology"
+  | "schon_reflection"
+  | "custom";
+
 /** Configuration for a reproducible ensemble of LLM thematic-analysis runs. */
 export interface RunConfig {
   /** Independent seeds, one run each. Defaults match the reference paper. */
@@ -72,6 +84,10 @@ export interface RunConfig {
   cosineThreshold?: number;
   /** Minimum fraction of runs a class must appear in to become a consensus theme. */
   minOccurrenceRatio?: number;
+  /** Epistemological paradigm chosen at research design. */
+  paradigm?: ParadigmId;
+  /** Analytical framework chosen at research design. */
+  framework?: FrameworkId;
 }
 
 /** Provenance for one run: the full audit trail of how its themes were derived. */
@@ -189,6 +205,16 @@ export interface PipelineTrace {
   minOccurrenceRatio: number;
   temperature: number;
   seeds: number[];
+  /** Research design choices recorded for transparency. */
+  paradigm?: ParadigmId;
+  framework?: FrameworkId;
+}
+
+/** One point on the theoretical-saturation curve. */
+export interface SaturationPoint {
+  runsIncluded: number;
+  distinctClasses: number;
+  newClasses: number;
 }
 
 export interface ReliabilityReport {
@@ -199,6 +225,8 @@ export interface ReliabilityReport {
   consensus: ConsensusResult;
   kappa: KappaResult | null;
   cosine: CosineResult | null;
+  /** Theoretical-saturation curve: distinct theme classes per run prefix. */
+  saturation: SaturationPoint[];
 }
 
 /** A researcher's case-by-case judgement on a consensus theme. */
@@ -208,6 +236,26 @@ export interface ThemeAnnotation {
   note: string;
   /** ISO timestamp of the annotation. */
   updatedAt: string;
+}
+
+/** One COREQ 32-item checklist entry. */
+export interface CoreqItem {
+  id: number;
+  domain: "team" | "study_methods" | "context" | "analysis" | "reports";
+  question: string;
+}
+
+/** A researcher's response to a COREQ item. */
+export interface CoreqResponse {
+  checked: boolean;
+  detail: string;
+  updatedAt: string;
+}
+
+/** Research-design selections carried into the analysis. */
+export interface ResearchDesign {
+  paradigm: ParadigmId;
+  framework: FrameworkId;
 }
 
 /** Full output of a single document's ensemble analysis. */

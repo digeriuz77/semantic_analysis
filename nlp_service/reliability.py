@@ -298,6 +298,37 @@ def compute_reliability(
             "matrix": [[round(float(v), 4) for v in row] for row in cmatrix],
         }
 
+    # --- Saturation curve: distinct theme classes per run prefix ---
+    # For each prefix k (runs 0..k-1), re-cluster using only those runs and
+    # count distinct equivalence classes. The marginal increase ("new classes")
+    # shows when new themes stop emerging — theoretical saturation (Source B:
+    # "saturation is a process not a number").
+    saturation_curve: List[Dict[str, Any]] = []
+    prev_classes = 0
+    for k in range(1, n_runs + 1):
+        member_idx = [i for i, f in enumerate(flat) if f["run"] < k]
+        if not member_idx:
+            saturation_curve.append(
+                {"runsIncluded": k, "distinctClasses": 0, "newClasses": 0}
+            )
+            prev_classes = 0
+            continue
+        uf_sub = _UnionFind(len(member_idx))
+        idx_map = {orig: pos for pos, orig in enumerate(member_idx)}
+        for a_pos, a_orig in enumerate(member_idx):
+            for b_orig in member_idx[a_pos + 1:]:
+                if float(sim[a_orig, b_orig]) >= cosine_threshold:
+                    uf_sub.union(a_pos, idx_map[b_orig])
+        distinct = len({uf_sub.find(p) for p in range(len(member_idx))})
+        saturation_curve.append(
+            {
+                "runsIncluded": k,
+                "distinctClasses": distinct,
+                "newClasses": max(0, distinct - prev_classes),
+            }
+        )
+        prev_classes = distinct
+
     return {
         "runCount": n_runs,
         "embeddingBackend": backend,
@@ -306,4 +337,5 @@ def compute_reliability(
         "consensus": {"themes": consensus_themes, "totalRuns": n_runs},
         "kappa": kappa_result,
         "cosine": cosine_result,
+        "saturation": saturation_curve,
     }

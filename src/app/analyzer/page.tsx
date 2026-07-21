@@ -7,21 +7,25 @@ import { EnsembleDashboard } from "@/components/EnsembleDashboard";
 import { AnalysisConfigurator, defaultConfig } from "@/components/AnalysisConfigurator";
 import { SpecialistView } from "@/components/SpecialistView";
 import { ModelCompareView } from "@/components/ModelCompareView";
+import { ResearchDesignStep } from "@/components/ResearchDesignStep";
+import { CoreqChecklistView } from "@/components/CoreqChecklistView";
 import type {
   EnsembleResult,
   LlmProvider,
   ModelComparisonResult,
+  ResearchDesign,
   RunConfig,
   SpecialistResult,
 } from "@/types";
-import { Upload, BarChart3, Microscope, GitCompare, AlertCircle } from "lucide-react";
+import { Upload, BarChart3, Microscope, GitCompare, AlertCircle, Compass, ClipboardCheck } from "lucide-react";
 
-type View = "upload" | "configure" | "results" | "specialist" | "compare";
+type View = "upload" | "design" | "configure" | "results" | "specialist" | "compare" | "coreq";
 
 export default function AnalyzerPage() {
   const [view, setView] = useState<View>("upload");
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<RunConfig>(defaultConfig());
+  const [design, setDesign] = useState<ResearchDesign | null>(null);
   const [results, setResults] = useState<EnsembleResult[]>([]);
   const [specialistResult, setSpecialistResult] = useState<SpecialistResult | null>(null);
   const [compareResult, setCompareResult] = useState<ModelComparisonResult | null>(null);
@@ -43,6 +47,20 @@ export default function AnalyzerPage() {
     setFiles(selected);
     setConfig(defaultConfig());
     setError(null);
+    setView("design");
+  };
+
+  const handleDesignComplete = (d: ResearchDesign) => {
+    setDesign(d);
+    // Load the framework's prompt template into the config (overridable later).
+    import("@/lib/frameworks").then(({ FRAMEWORKS }) => {
+      setConfig((c) => ({
+        ...c,
+        paradigm: d.paradigm,
+        framework: d.framework,
+        promptTemplate: FRAMEWORKS[d.framework].promptTemplate,
+      }));
+    });
     setView("configure");
   };
 
@@ -71,6 +89,8 @@ export default function AnalyzerPage() {
         if (runConfig.promptTemplate) {
           formData.append("promptTemplate", runConfig.promptTemplate);
         }
+        if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
+        if (runConfig.framework) formData.append("framework", runConfig.framework);
 
         const res = await fetch("/api/analyze-ensemble", {
           method: "POST",
@@ -163,6 +183,7 @@ export default function AnalyzerPage() {
     setResults([]);
     setSpecialistResult(null);
     setCompareResult(null);
+    setDesign(null);
     setError(null);
     setView("upload");
   };
@@ -183,7 +204,7 @@ export default function AnalyzerPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <NavButton icon={Upload} label="Upload" active={view === "upload" || view === "configure"} onClick={() => reset()} />
+          <NavButton icon={Upload} label="Upload" active={view === "upload" || view === "design" || view === "configure"} onClick={() => reset()} />
           <NavButton
             icon={BarChart3}
             label="Results"
@@ -197,6 +218,12 @@ export default function AnalyzerPage() {
             active={view === "compare"}
             disabled={files.length === 0}
             onClick={() => files.length > 0 && setView("compare")}
+          />
+          <NavButton
+            icon={ClipboardCheck}
+            label="COREQ"
+            active={view === "coreq"}
+            onClick={() => setView("coreq")}
           />
           <NavButton
             icon={Microscope}
@@ -231,12 +258,20 @@ export default function AnalyzerPage() {
         <FileUpload onFilesSelected={handleFilesSelected} />
       )}
 
+      {!isProcessing && view === "design" && (
+        <ResearchDesignStep
+          files={files}
+          onComplete={handleDesignComplete}
+          onBack={() => setView("upload")}
+        />
+      )}
+
       {!isProcessing && view === "configure" && (
         <AnalysisConfigurator
           files={files}
           initialConfig={config}
           onRun={handleRun}
-          onBack={() => setView("upload")}
+          onBack={() => setView("design")}
         />
       )}
 
@@ -260,6 +295,10 @@ export default function AnalyzerPage() {
           onRun={handleCompare}
           onBack={() => setView(results.length > 0 ? "results" : "configure")}
         />
+      )}
+
+      {view === "coreq" && (
+        <CoreqChecklistView onBack={() => setView(results.length > 0 ? "results" : "upload")} />
       )}
     </main>
   );
