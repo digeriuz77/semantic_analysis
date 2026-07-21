@@ -1,27 +1,35 @@
 import type { LlmProvider } from "@/types";
 import type { ChatAdapter } from "./types";
 import { fireworksAdapter } from "./fireworks";
+import { openaiAdapter } from "./openai";
+import { anthropicAdapter } from "./anthropic";
+import { geminiAdapter } from "./gemini";
+import { openrouterAdapter } from "./openrouter";
 
 /**
- * Provider registry. Phase 1 ships Fireworks only (the currently configured
- * provider). OpenAI / Anthropic / Gemini / OpenRouter adapters slot in here in
- * Phase 2 without changing call sites.
+ * Provider registry. All five providers share the ChatAdapter contract.
+ * Add a key in .env.local to enable a provider; the UI surfaces only configured ones.
  */
-const ADAPTERS: Partial<Record<LlmProvider, ChatAdapter>> = {
+const ADAPTERS: Record<LlmProvider, ChatAdapter> = {
   fireworks: fireworksAdapter,
+  openai: openaiAdapter,
+  anthropic: anthropicAdapter,
+  gemini: geminiAdapter,
+  openrouter: openrouterAdapter,
 };
 
 export function getChatAdapter(provider: LlmProvider): ChatAdapter {
   const adapter = ADAPTERS[provider];
   if (!adapter) {
-    throw new Error(
-      `No adapter configured for provider "${provider}". Additional providers arrive in Phase 2.`
-    );
+    throw new Error(`No adapter configured for provider "${provider}".`);
   }
   return adapter;
 }
 
 export function isProviderConfigured(provider: LlmProvider): boolean {
-  const adapter = ADAPTERS[provider];
-  return Boolean(adapter?.isConfigured());
+  return ADAPTERS[provider].isConfigured();
+}
+
+export function getConfiguredProviders(): LlmProvider[] {
+  return (Object.keys(ADAPTERS) as LlmProvider[]).filter(isProviderConfigured);
 }
