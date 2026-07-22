@@ -217,6 +217,25 @@ export function AnalysisConfigurator({
             Fixed seeds enable reproducible variation. 6 runs yields 15 pairwise
             comparisons (~41% lower variance than 3).
           </p>
+
+          {/* Adaptive mode toggle */}
+          <label className="flex items-center gap-2 mt-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={config.adaptive ?? false}
+              onChange={(e) => update("adaptive", e.target.checked)}
+              className="w-4 h-4 accent-teal-500 flex-shrink-0"
+            />
+            <div>
+              <span className="text-slate-200 text-sm font-medium">
+                Adaptive mode (early stop on saturation)
+              </span>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Runs seeds sequentially and stops when two consecutive runs add
+                no new themes — saves cost once themes stabilise.
+              </p>
+            </div>
+          </label>
         </div>
 
         {/* Temperature */}

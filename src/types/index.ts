@@ -88,6 +88,8 @@ export interface RunConfig {
   paradigm?: ParadigmId;
   /** Analytical framework chosen at research design. */
   framework?: FrameworkId;
+  /** Adaptive mode: run in batches and stop early when saturation plateaus. */
+  adaptive?: boolean;
 }
 
 /** Provenance for one run: the full audit trail of how its themes were derived. */
@@ -273,6 +275,8 @@ export interface EnsembleResult {
   pipelineTrace: PipelineTrace;
   /** True when themes came from the built-in demo generator (no LLM key). */
   demo: boolean;
+  /** True when adaptive mode stopped the ensemble early on a saturation plateau. */
+  stoppedEarly?: boolean;
   /** Researcher annotations, keyed by consensus-theme label. Client-side only. */
   annotations?: Record<string, ThemeAnnotation>;
 }
@@ -296,6 +300,8 @@ export interface ModelComparisonEntry {
 
 export interface ModelComparisonResult {
   entries: ModelComparisonEntry[];
+  /** Themes stable across 2+ model architectures (highest confidence). */
+  crossModelConsensus: ConsensusTheme[];
   fileName: string;
   config: Omit<RunConfig, "provider" | "model">;
 }

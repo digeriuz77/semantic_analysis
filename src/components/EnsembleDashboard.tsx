@@ -11,6 +11,7 @@ import type {
 } from "@/types";
 import type { Paradigm } from "@/lib/paradigms";
 import { ThemeLineageView } from "@/components/ThemeLineageView";
+import { ExportPanel } from "@/components/ExportPanel";
 import { useAnnotations } from "@/lib/useAnnotations";
 import { PARADIGMS } from "@/lib/paradigms";
 import {
@@ -159,6 +160,20 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
         {tab === "runs" && <RunsTab result={result} />}
         {tab === "pipeline" && <PipelineTab result={result} />}
       </div>
+
+      {result.stoppedEarly && (
+        <div className="flex items-start gap-3 bg-teal-900/20 border border-teal-700/50 rounded-xl p-4">
+          <TrendingUp size={18} className="text-teal-400 mt-0.5" />
+          <p className="text-teal-200 text-sm">
+            <span className="font-semibold">Adaptive stop.</span> The ensemble
+            stopped early after {result.runs.length} run{result.runs.length === 1 ? "" : "s"} —
+            two consecutive runs added no new theme names, indicating a
+            theoretical-saturation plateau.
+          </p>
+        </div>
+      )}
+
+      <ExportPanel result={result} annotations={annotations} />
     </div>
   );
 }

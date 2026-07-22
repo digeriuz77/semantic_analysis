@@ -9,8 +9,10 @@ import { SpecialistView } from "@/components/SpecialistView";
 import { ModelCompareView } from "@/components/ModelCompareView";
 import { ResearchDesignStep } from "@/components/ResearchDesignStep";
 import { CoreqChecklistView } from "@/components/CoreqChecklistView";
+import { DatasetGallery } from "@/components/DatasetGallery";
 import type {
   EnsembleResult,
+  FrameworkId,
   LlmProvider,
   ModelComparisonResult,
   ResearchDesign,
@@ -30,6 +32,7 @@ export default function AnalyzerPage() {
   const [specialistResult, setSpecialistResult] = useState<SpecialistResult | null>(null);
   const [compareResult, setCompareResult] = useState<ModelComparisonResult | null>(null);
   const [providers, setProviders] = useState<LlmProvider[]>([]);
+  const [preselectedFramework, setPreselectedFramework] = useState<FrameworkId | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [progress, setProgress] = useState(0);
@@ -47,6 +50,14 @@ export default function AnalyzerPage() {
     setFiles(selected);
     setConfig(defaultConfig());
     setError(null);
+    setView("design");
+  };
+
+  const handleSampleSelected = (file: File, framework: FrameworkId) => {
+    setFiles([file]);
+    setConfig(defaultConfig());
+    setError(null);
+    setPreselectedFramework(framework);
     setView("design");
   };
 
@@ -91,6 +102,7 @@ export default function AnalyzerPage() {
         }
         if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
         if (runConfig.framework) formData.append("framework", runConfig.framework);
+        if (runConfig.adaptive) formData.append("adaptive", "true");
 
         const res = await fetch("/api/analyze-ensemble", {
           method: "POST",
@@ -185,6 +197,7 @@ export default function AnalyzerPage() {
     setCompareResult(null);
     setDesign(null);
     setError(null);
+    setPreselectedFramework(null);
     setView("upload");
   };
 
@@ -255,12 +268,16 @@ export default function AnalyzerPage() {
       {isProcessing && view !== "compare" && <ProcessingView step={processingStep} progress={progress} />}
 
       {!isProcessing && view === "upload" && (
-        <FileUpload onFilesSelected={handleFilesSelected} />
+        <div>
+          <FileUpload onFilesSelected={handleFilesSelected} />
+          <DatasetGallery onSelect={handleSampleSelected} />
+        </div>
       )}
 
       {!isProcessing && view === "design" && (
         <ResearchDesignStep
           files={files}
+          preselectedFramework={preselectedFramework}
           onComplete={handleDesignComplete}
           onBack={() => setView("upload")}
         />

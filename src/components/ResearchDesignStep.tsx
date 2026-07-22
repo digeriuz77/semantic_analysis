@@ -8,13 +8,17 @@ import { Compass, BookOpen, ArrowRight, Check } from "lucide-react";
 
 interface ResearchDesignStepProps {
   files: File[];
+  /** Framework pre-selected by the dataset gallery (null if none). */
+  preselectedFramework?: FrameworkId | null;
   onComplete: (design: ResearchDesign) => void;
   onBack: () => void;
 }
 
-export function ResearchDesignStep({ files, onComplete, onBack }: ResearchDesignStepProps) {
+export function ResearchDesignStep({ files, preselectedFramework, onComplete, onBack }: ResearchDesignStepProps) {
   const [paradigm, setParadigm] = useState<ParadigmId>("constructivist");
-  const [framework, setFramework] = useState<FrameworkId>("reflexive_ta");
+  const [framework, setFramework] = useState<FrameworkId>(
+    preselectedFramework ?? "reflexive_ta"
+  );
 
   const activeParadigm = PARADIGMS[paradigm];
   const activeFramework = FRAMEWORKS[framework];

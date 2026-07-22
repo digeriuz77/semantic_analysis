@@ -5,11 +5,13 @@ import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
 import { PROVIDER_LABEL } from "@/lib/providers";
 import type {
+  ConsensusTheme,
   KappaBand,
   LlmProvider,
   ModelComparisonEntry,
   ModelComparisonResult,
   RunConfig,
+  ThemeRun,
 } from "@/types";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -44,7 +46,8 @@ function parseNumber(v: string | null, fallback: number, min: number, max: numbe
 /**
  * Cross-model comparison: process one file once, then run the ensemble for each
  * requested provider+model in parallel, returning per-model reliability metrics
- * (kappa + cosine + consensus counts) for head-to-head display.
+ * (kappa + cosine + consensus counts) for head-to-head display. Also computes
+ * cross-model consensus: themes stable across 2+ architectures.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -87,7 +90,9 @@ export async function POST(request: NextRequest) {
       promptTemplate,
     };
 
-    // Run each model's ensemble in parallel.
+    // Run each model's ensemble in parallel. Collect each model's consensus
+    // themes for the cross-model pass.
+    const perModelConsensus: ConsensusTheme[][] = [];
     const results = await Promise.all(
       specs.map(async (spec): Promise<ModelComparisonEntry> => {
         const label = `${PROVIDER_LABEL[spec.provider]} · ${spec.model}`;
@@ -103,6 +108,7 @@ export async function POST(request: NextRequest) {
 
           const reliability = await callReliability(runs, { cosineThreshold, minOccurrenceRatio });
           const consensusThemes = reliability.consensus.themes;
+          perModelConsensus.push(consensusThemes);
 
           return {
             provider: spec.provider,
@@ -119,6 +125,7 @@ export async function POST(request: NextRequest) {
             demo,
           };
         } catch (e) {
+          perModelConsensus.push([]);
           return {
             provider: spec.provider,
             model: spec.model,
@@ -138,8 +145,38 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    // Cross-model consensus: treat each model's consensus themes as a "run" and
+    // cluster them via the reliability engine. Themes appearing across 2+ model
+    // architectures are cross-architecture-stable → highest researcher confidence.
+    let crossModelConsensus: ConsensusTheme[] = [];
+    const validSets = perModelConsensus.filter((s) => s.length > 0);
+    if (validSets.length >= 2) {
+      // Map ConsensusTheme back to Theme-compatible objects for the reliability
+      // engine (which expects {name, description, keywords}).
+      const crossRuns: ThemeRun[] = validSets.map((themes, i) => ({
+        seed: i,
+        themes: themes.map((ct) => ({
+          name: ct.label,
+          description: ct.description,
+          keywords: ct.keywords,
+          prevalence: Math.round(ct.consistency * 100),
+          supportingQuotes: ct.evidence?.map((e) => e.text),
+        })),
+      }));
+      try {
+        const crossRel = await callReliability(crossRuns, {
+          cosineThreshold,
+          minOccurrenceRatio: 0.5,
+        });
+        crossModelConsensus = crossRel.consensus.themes;
+      } catch {
+        /* cross-model consensus is best-effort enrichment */
+      }
+    }
+
     const output: ModelComparisonResult = {
       entries: results,
+      crossModelConsensus,
       fileName: file.name,
       config: baseConfig,
     };
