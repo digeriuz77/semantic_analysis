@@ -49,10 +49,8 @@ public/datasets/     # synthetic corpora + index.json (demo gallery / fixtures)
 - Cosine: run-centroid dot product (normalised embeddings).
 - Returns null κ/cosine when <2 runs or insufficient themes.
 
-## Known limitations remaining (drives Phases 2–4)
-- Single provider wired (Fireworks); `ChatAdapter` ready for Phase 2 providers.
-- Custom prompt UI not yet exposed (engine exists in `prompts.ts`).
-- No paradigm/methodology selection, COREQ, saturation (Phase 3).
+## Known limitations remaining (drives Phases 3–5)
+- Multi-provider works but no paradigm/methodology selection, COREQ, saturation (Phase 3).
 - No export / reproducibility manifest (Phase 4).
 - No DB persistence (Phase 5).
 

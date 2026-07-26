@@ -11,6 +11,7 @@ Identify 3-5 key themes present in the data. For each theme provide:
 - "description": one or two sentences grounded in the text
 - "keywords": an array of 2-4 representative keywords
 - "prevalence": an integer from 0 to 100 estimating how prevalent the theme is
+- "supporting_quotes": an array of 1-3 short verbatim quotes from the text that evidence this theme
 
 Return ONLY a valid JSON array of these objects. Do not include markdown fences or any commentary.
 

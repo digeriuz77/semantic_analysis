@@ -1,0 +1,97 @@
+import { readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+
+/**
+ * Runtime-adaptive SQLite. We can't ship a native module (network install is
+ * unavailable), so we use whichever SQLite builtin the current runtime provides:
+ *   - bun  → bun:sqlite   (Database)
+ *   - node → node:sqlite  (DatabaseSync, Node 22+)
+ *
+ * createRequire + a constructed specifier defeats the bundler's static module
+ * resolution, so neither runtime's builtin is attempted at build time. Both APIs
+ * are synchronous, which is appropriate for a local single-user research tool.
+ */
+
+export const DB_PATH =
+  process.env.CORPUS_DB_PATH || join(process.cwd(), "data", "corpus.db");
+
+/** A normalized statement interface over both runtimes. */
+export interface DbStatement {
+  get(...params: unknown[]): Record<string, unknown> | undefined;
+  all(...params: unknown[]): Record<string, unknown>[];
+  run(...params: unknown[]): { lastInsertRowid: number | bigint; changes: number };
+}
+
+export interface DbClient {
+  exec(sql: string): void;
+  prepare(sql: string): DbStatement;
+  close(): void;
+}
+
+const cjsRequire = createRequire(import.meta.url);
+
+// Constructed specifiers so the bundler cannot statically resolve them.
+const BUN_SPEC = "bun" + ":sqlite";
+const NODE_SPEC = "node" + ":sqlite";
+
+function openRaw(path: string): DbClient {
+  // Try bun first (the sandbox runtime is bun).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { Database } = cjsRequire(BUN_SPEC) as any;
+    const db = new Database(path);
+    return {
+      exec: (sql: string) => db.exec(sql),
+      prepare: (sql: string) => {
+        const stmt = db.prepare(sql);
+        return {
+          get: (...p) => stmt.get(...p),
+          all: (...p) => stmt.all(...p),
+          run: (...p) => {
+            const r = stmt.run(...p);
+            return {
+              lastInsertRowid: Number(r.lastInsertRowid),
+              changes: Number(r.changes),
+            };
+          },
+        };
+      },
+      close: () => db.close(),
+    };
+  } catch {
+    // Fall back to Node's built-in sqlite.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { DatabaseSync } = cjsRequire(NODE_SPEC) as any;
+    const db = new DatabaseSync(path);
+    return {
+      exec: (sql: string) => db.exec(sql),
+      prepare: (sql: string) => db.prepare(sql),
+      close: () => db.close(),
+    };
+  }
+}
+
+let _db: DbClient | null = null;
+
+/**
+ * Open (and lazily migrate) the local SQLite corpus store at data/corpus.db.
+ * The file travels with the project so iterative research persists across
+ * sessions. Schema is idempotent (all CREATE ... IF NOT EXISTS).
+ */
+export function getDb(): DbClient {
+  if (_db) return _db;
+  mkdirSync(dirname(DB_PATH), { recursive: true });
+  const db = openRaw(DB_PATH);
+  db.exec("PRAGMA journal_mode = WAL;");
+  db.exec("PRAGMA foreign_keys = ON;");
+  const schema = readFileSync(join(process.cwd(), "src", "db", "schema.sql"), "utf8");
+  db.exec(schema);
+  _db = db;
+  return db;
+}
+
+export function _resetDb(): void {
+  _db = null;
+}

@@ -13,21 +13,36 @@ frameworks, COREQ) drawn from qualitative-research best practice.
 
 ## Features
 
+- **Research design first** — select an epistemological paradigm (constructivist,
+  post-positivist, critical, pragmatic) and analytical framework (Braun & Clarke
+  reflexive TA, grounded theory, content analysis, phenomenology, Schön
+  reflection, or custom). The paradigm drives which validity criteria are shown.
 - **Ensemble runs** — 1–6 independent runs with fixed seeds for reproducible
   variation (quick mode with 1 seed, rigorous mode with 6).
-- **Dual reliability metrics** — Cohen's kappa (Landis & Koch bands) + run-pair
-  cosine similarity, visualised as a similarity matrix heatmap.
+- **Paradigm-aware reliability** — Cohen's kappa (Landis & Koch bands) +
+  run-pair cosine similarity for post-positivist work; Lincoln & Guba
+  trustworthiness criteria foregrounded for constructivist work (κ shown as
+  supplementary, not mandated). Visualised as a similarity matrix heatmap.
+- **Theoretical saturation curve** — distinct theme classes per accumulated run,
+  indicating when new themes stop emerging.
 - **Consensus themes** — semantic clustering groups paraphrased themes; themes
   appearing in ≥50% of runs become consensus themes, tiered high (≥83%) vs
   moderate (50–66%).
-- **Configurable** — seeds, temperature, cosine threshold, occurrence ratio,
-  model, and (Phase 2) custom prompts with `{seed}` / `{text_chunk}`.
+- **Explainability layer** — every theme is auditable: derivation lineage
+  (which runs/seeds agreed), evidence grounding (LLM quotes + retrieved source
+  spans), per-run provenance (raw output, rendered prompt, parse status), a
+  pipeline trace, and researcher annotations (accept/reject/flag).
+- **Multi-provider** — Fireworks, OpenAI, Anthropic, Google Gemini, and
+  OpenRouter adapters behind a unified `ChatAdapter`. Add API keys in
+  `.env.local` to enable providers; the UI surfaces only configured ones.
+- **Cross-model comparison** — run the same corpus through multiple models
+  simultaneously and compare κ / cosine / consensus counts head-to-head.
+- **COREQ checklist** — self-check against the 32 reporting items, with local
+  persistence and markdown export.
 - **Demo mode** — without an LLM key the app generates deterministic themes so
-  the reliability dashboard stays fully explorable.
+  the dashboard stays fully explorable.
 - **NLP preprocessing** — NLTK tokenization/lemmatization, VADER sentiment,
   readability, word frequency; supports `.txt`, `.pdf`, `.docx`, `.csv`.
-- **Specialist lens** — Schön double-loop reflection analysis (kept as one
-  analytical framework; generalised into a frameworks library in Phase 3).
 
 ## Tech Stack
 
@@ -91,5 +106,7 @@ teaching reflection) with an `index.json` manifest for a future dataset gallery.
 
 ## Roadmap
 
-See `.kilocode/roadmap.md` for the full phased plan. Phases 0–1 (foundation +
-reliability core) are complete; Phase 2 (multi-provider + custom prompts) is next.
+See `.kilocode/roadmap.md` for the full phased plan. Phases 0–3 (foundation +
+reliability core + multi-provider/model-compare + explainability +
+methodology scaffolding) are complete; Phase 4 (dataset gallery, export
+manifest, cross-model ensemble, adaptive runs) is next.

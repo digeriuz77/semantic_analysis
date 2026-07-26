@@ -129,19 +129,23 @@ def compute_reliability(
     # Flatten every theme from every run, remembering its origin.
     flat: List[Dict[str, Any]] = []
     for run_index, run in enumerate(runs):
+        seed = run.get("seed")
         for theme in run.get("themes", []) or []:
             name = str(theme.get("name", "")).strip()
             description = str(theme.get("description", "")).strip()
             keywords = theme.get("keywords", []) or []
+            quotes = theme.get("supporting_quotes") or theme.get("quotes") or []
             text = (name + ". " + description).strip(". ") or name or description
             if not text:
                 continue
             flat.append(
                 {
                     "run": run_index,
+                    "seed": seed,
                     "name": name,
                     "description": description,
                     "keywords": [str(k) for k in keywords if str(k).strip()],
+                    "quotes": [str(q) for q in quotes if str(q).strip()],
                     "text": text,
                 }
             )
@@ -204,6 +208,26 @@ def compute_reliability(
                 if key not in seen:
                     seen.add(key)
                     keyword_set.append(kw)
+
+        # Lineage: per-member provenance + the cosine that bound it to the cluster.
+        # This is the audit trail that makes a consensus theme's derivation
+        # inspectable case-by-case (which runs/seeds agreed, how strongly).
+        member_lineage: List[Dict[str, Any]] = []
+        for m in sorted(members, key=lambda x: flat[x]["run"]):
+            cosine_to_medoid = round(float(sim[m, medoid]), 4) if m != medoid else 1.0
+            member_lineage.append(
+                {
+                    "runIndex": flat[m]["run"],
+                    "seed": flat[m].get("seed"),
+                    "name": flat[m]["name"],
+                    "description": flat[m]["description"],
+                    "keywords": flat[m]["keywords"][:6],
+                    "quotes": flat[m]["quotes"][:3],
+                    "cosineToMedoid": cosine_to_medoid,
+                    "isMedoid": m == medoid,
+                }
+            )
+
         consensus_themes.append(
             {
                 "label": rep["name"] or rep["description"][:60] or "Untitled theme",
@@ -214,6 +238,8 @@ def compute_reliability(
                 "consistency": round(consistency, 4),
                 "tier": "high" if consistency >= 0.83 else "moderate",
                 "memberCount": len(members),
+                "runsPresent": runs_present,
+                "lineage": member_lineage,
             }
         )
     consensus_themes.sort(
@@ -272,6 +298,37 @@ def compute_reliability(
             "matrix": [[round(float(v), 4) for v in row] for row in cmatrix],
         }
 
+    # --- Saturation curve: distinct theme classes per run prefix ---
+    # For each prefix k (runs 0..k-1), re-cluster using only those runs and
+    # count distinct equivalence classes. The marginal increase ("new classes")
+    # shows when new themes stop emerging — theoretical saturation (Source B:
+    # "saturation is a process not a number").
+    saturation_curve: List[Dict[str, Any]] = []
+    prev_classes = 0
+    for k in range(1, n_runs + 1):
+        member_idx = [i for i, f in enumerate(flat) if f["run"] < k]
+        if not member_idx:
+            saturation_curve.append(
+                {"runsIncluded": k, "distinctClasses": 0, "newClasses": 0}
+            )
+            prev_classes = 0
+            continue
+        uf_sub = _UnionFind(len(member_idx))
+        idx_map = {orig: pos for pos, orig in enumerate(member_idx)}
+        for a_pos, a_orig in enumerate(member_idx):
+            for b_orig in member_idx[a_pos + 1:]:
+                if float(sim[a_orig, b_orig]) >= cosine_threshold:
+                    uf_sub.union(a_pos, idx_map[b_orig])
+        distinct = len({uf_sub.find(p) for p in range(len(member_idx))})
+        saturation_curve.append(
+            {
+                "runsIncluded": k,
+                "distinctClasses": distinct,
+                "newClasses": max(0, distinct - prev_classes),
+            }
+        )
+        prev_classes = distinct
+
     return {
         "runCount": n_runs,
         "embeddingBackend": backend,
@@ -280,4 +337,5 @@ def compute_reliability(
         "consensus": {"themes": consensus_themes, "totalRuns": n_runs},
         "kappa": kappa_result,
         "cosine": cosine_result,
+        "saturation": saturation_curve,
     }

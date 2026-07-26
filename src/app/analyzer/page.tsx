@@ -1,32 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { ProcessingView } from "@/components/ProcessingView";
 import { EnsembleDashboard } from "@/components/EnsembleDashboard";
 import { AnalysisConfigurator, defaultConfig } from "@/components/AnalysisConfigurator";
 import { SpecialistView } from "@/components/SpecialistView";
-import type { EnsembleResult, RunConfig, SpecialistResult } from "@/types";
-import { Upload, BarChart3, Microscope, AlertCircle } from "lucide-react";
+import { ModelCompareView } from "@/components/ModelCompareView";
+import { ResearchDesignStep } from "@/components/ResearchDesignStep";
+import { CoreqChecklistView } from "@/components/CoreqChecklistView";
+import { DatasetGallery } from "@/components/DatasetGallery";
+import type {
+  EnsembleResult,
+  FrameworkId,
+  LlmProvider,
+  ModelComparisonResult,
+  ResearchDesign,
+  RunConfig,
+  SpecialistResult,
+} from "@/types";
+import { Upload, BarChart3, Microscope, GitCompare, AlertCircle, Compass, ClipboardCheck } from "lucide-react";
 
-type View = "upload" | "configure" | "results" | "specialist";
+type View = "upload" | "design" | "configure" | "results" | "specialist" | "compare" | "coreq";
 
 export default function AnalyzerPage() {
   const [view, setView] = useState<View>("upload");
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<RunConfig>(defaultConfig());
+  const [design, setDesign] = useState<ResearchDesign | null>(null);
   const [results, setResults] = useState<EnsembleResult[]>([]);
   const [specialistResult, setSpecialistResult] = useState<SpecialistResult | null>(null);
+  const [compareResult, setCompareResult] = useState<ModelComparisonResult | null>(null);
+  const [providers, setProviders] = useState<LlmProvider[]>([]);
+  const [preselectedFramework, setPreselectedFramework] = useState<FrameworkId | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState("");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/providers")
+      .then((r) => r.json())
+      .then((data) => setProviders(data.providers ?? []))
+      .catch(() => {});
+  }, []);
 
   const handleFilesSelected = (selected: File[]) => {
     if (selected.length === 0) return;
     setFiles(selected);
     setConfig(defaultConfig());
     setError(null);
+    setView("design");
+  };
+
+  const handleSampleSelected = (file: File, framework: FrameworkId) => {
+    setFiles([file]);
+    setConfig(defaultConfig());
+    setError(null);
+    setPreselectedFramework(framework);
+    setView("design");
+  };
+
+  const handleDesignComplete = (d: ResearchDesign) => {
+    setDesign(d);
+    // Load the framework's prompt template into the config (overridable later).
+    import("@/lib/frameworks").then(({ FRAMEWORKS }) => {
+      setConfig((c) => ({
+        ...c,
+        paradigm: d.paradigm,
+        framework: d.framework,
+        promptTemplate: FRAMEWORKS[d.framework].promptTemplate,
+      }));
+    });
     setView("configure");
   };
 
@@ -55,6 +100,9 @@ export default function AnalyzerPage() {
         if (runConfig.promptTemplate) {
           formData.append("promptTemplate", runConfig.promptTemplate);
         }
+        if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
+        if (runConfig.framework) formData.append("framework", runConfig.framework);
+        if (runConfig.adaptive) formData.append("adaptive", "true");
 
         const res = await fetch("/api/analyze-ensemble", {
           method: "POST",
@@ -105,11 +153,51 @@ export default function AnalyzerPage() {
     }
   };
 
+  const handleCompare = async (specs: { provider: LlmProvider; model: string }[]) => {
+    if (files.length === 0) return;
+    setIsProcessing(true);
+    setError(null);
+    setProgress(0);
+    setProcessingStep(`Comparing ${specs.length} models on ${files[0].name}…`);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", files[0]);
+      formData.append("specs", JSON.stringify(specs));
+      formData.append("seeds", config.seeds.join(","));
+      formData.append("temperature", String(config.temperature));
+      formData.append("cosineThreshold", String(config.cosineThreshold ?? 0.7));
+      formData.append("minOccurrenceRatio", String(config.minOccurrenceRatio ?? 0.5));
+      if (config.promptTemplate) {
+        formData.append("promptTemplate", config.promptTemplate);
+      }
+
+      const res = await fetch("/api/compare-models", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Comparison failed (${res.status})`);
+      }
+      setCompareResult(await res.json());
+      setProgress(100);
+      setView("compare");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Model comparison failed.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const reset = () => {
     setFiles([]);
     setResults([]);
     setSpecialistResult(null);
+    setCompareResult(null);
+    setDesign(null);
     setError(null);
+    setPreselectedFramework(null);
     setView("upload");
   };
 
@@ -129,13 +217,26 @@ export default function AnalyzerPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <NavButton icon={Upload} label="Upload" active={view === "upload" || view === "configure"} onClick={() => reset()} />
+          <NavButton icon={Upload} label="Upload" active={view === "upload" || view === "design" || view === "configure"} onClick={() => reset()} />
           <NavButton
             icon={BarChart3}
             label="Results"
             active={view === "results"}
             disabled={results.length === 0}
             onClick={() => results.length > 0 && setView("results")}
+          />
+          <NavButton
+            icon={GitCompare}
+            label="Compare"
+            active={view === "compare"}
+            disabled={files.length === 0}
+            onClick={() => files.length > 0 && setView("compare")}
+          />
+          <NavButton
+            icon={ClipboardCheck}
+            label="COREQ"
+            active={view === "coreq"}
+            onClick={() => setView("coreq")}
           />
           <NavButton
             icon={Microscope}
@@ -164,10 +265,22 @@ export default function AnalyzerPage() {
         </div>
       )}
 
-      {isProcessing && <ProcessingView step={processingStep} progress={progress} />}
+      {isProcessing && view !== "compare" && <ProcessingView step={processingStep} progress={progress} />}
 
       {!isProcessing && view === "upload" && (
-        <FileUpload onFilesSelected={handleFilesSelected} />
+        <div>
+          <FileUpload onFilesSelected={handleFilesSelected} />
+          <DatasetGallery onSelect={handleSampleSelected} />
+        </div>
+      )}
+
+      {!isProcessing && view === "design" && (
+        <ResearchDesignStep
+          files={files}
+          preselectedFramework={preselectedFramework}
+          onComplete={handleDesignComplete}
+          onBack={() => setView("upload")}
+        />
       )}
 
       {!isProcessing && view === "configure" && (
@@ -175,7 +288,7 @@ export default function AnalyzerPage() {
           files={files}
           initialConfig={config}
           onRun={handleRun}
-          onBack={() => setView("upload")}
+          onBack={() => setView("design")}
         />
       )}
 
@@ -188,6 +301,21 @@ export default function AnalyzerPage() {
 
       {!isProcessing && view === "specialist" && specialistResult && (
         <SpecialistView result={specialistResult} onBack={() => setView("results")} />
+      )}
+
+      {view === "compare" && files.length > 0 && (
+        <ModelCompareView
+          result={compareResult}
+          isRunning={isProcessing}
+          progress={progress}
+          providers={providers}
+          onRun={handleCompare}
+          onBack={() => setView(results.length > 0 ? "results" : "configure")}
+        />
+      )}
+
+      {view === "coreq" && (
+        <CoreqChecklistView onBack={() => setView(results.length > 0 ? "results" : "upload")} />
       )}
     </main>
   );

@@ -77,12 +77,19 @@ export function sanitizeThemes(value: unknown): Theme[] {
         typeof t.prevalence === "number"
           ? Math.max(0, Math.min(100, Math.round(t.prevalence)))
           : 0;
-      return {
+      const supportingQuotes = asStringArray(
+        t.supporting_quotes ?? t.supportingQuotes ?? t.quotes
+      );
+      const theme: Theme = {
         name: asString(t.name),
         description: asString(t.description),
         keywords: asStringArray(t.keywords),
         prevalence,
       };
+      if (supportingQuotes.length > 0) {
+        theme.supportingQuotes = supportingQuotes;
+      }
+      return theme;
     })
     .filter((t) => t.name.length > 0);
 }
