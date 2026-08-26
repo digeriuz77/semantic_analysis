@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ThemeAnnotation } from "@/types";
 
 /**
  * Persists researcher annotations per analysis to localStorage so case-by-case
  * judgements survive page reloads (full DB-backed persistence arrives in
  * Phase 5). Keyed by analysis id + consensus-theme index (labels can collide).
+ * Listens for the storage event so two open tabs stay in sync.
  */
 const STORAGE_PREFIX = "ta:annotations:";
 
@@ -24,10 +25,25 @@ export function useAnnotations(analysisId: string) {
     }
   );
 
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== storageKey) return;
+      try {
+        setAnnotations(
+          e.newValue ? (JSON.parse(e.newValue) as Record<string, ThemeAnnotation>) : {}
+        );
+      } catch {
+        /* malformed external write; keep current state */
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [storageKey]);
+
   const annotate = useCallback(
-    (label: string, annotation: ThemeAnnotation) => {
+    (key: string, annotation: ThemeAnnotation) => {
       setAnnotations((prev) => {
-        const next = { ...prev, [label]: annotation };
+        const next = { ...prev, [key]: annotation };
         try {
           window.localStorage.setItem(storageKey, JSON.stringify(next));
         } catch {

@@ -8,12 +8,14 @@ import {
 } from "@/lib/nlp";
 import {
   runThematicEnsemble,
-  getTextChunkLength,
+  runAdaptiveEnsemble,
+  chunkText,
   filterSuccessfulRuns,
 } from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
 import { ALL_PROVIDERS } from "@/lib/providers";
+import { rateLimit, clientKey } from "@/lib/rateLimit";
 import type {
   EnsembleResult,
   FrameworkId,
@@ -29,6 +31,8 @@ export const maxDuration = 300;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CLIENT_TEXT_CHARS = 8000;
 const MAX_EVIDENCE_TEXT_CHARS = 40_000;
+/** LLM-heavy route: 10 analyses / 5 min per client. */
+const RATE_LIMIT = { limit: 10, windowMs: 5 * 60_000 };
 
 const DEFAULT_SEEDS = [42, 123, 456, 789, 1011, 1213];
 const DEFAULT_MODEL = "accounts/fireworks/models/llama-v3-70b-instruct";
@@ -66,6 +70,14 @@ function parseNumber(
  */
 export async function POST(request: NextRequest) {
   try {
+    const rl = rateLimit(clientKey(request), RATE_LIMIT.limit, RATE_LIMIT.windowMs);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many analyses. Please wait a moment and retry." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     if (!file) {
@@ -111,6 +123,7 @@ export async function POST(request: NextRequest) {
       (formData.get("promptTemplate") as string | null) || undefined;
     const paradigm = (formData.get("paradigm") as ParadigmId | null) || undefined;
     const framework = (formData.get("framework") as FrameworkId | null) || undefined;
+    const adaptive = formData.get("adaptive") === "true";
 
     const config: RunConfig = {
       seeds,
@@ -122,6 +135,7 @@ export async function POST(request: NextRequest) {
       promptTemplate,
       paradigm,
       framework,
+      adaptive,
     };
 
     // 1. NLP preprocessing (server-side; file never reaches the browser raw).
@@ -135,14 +149,27 @@ export async function POST(request: NextRequest) {
       MAX_EVIDENCE_TEXT_CHARS
     );
 
-    // 2. Ensemble runs (each carries full provenance).
+    // 2. Ensemble runs (each carries full provenance). Adaptive mode runs
+    // seeds sequentially and stops early on a discovery plateau; otherwise
+    // seeds run in parallel.
     let demo = false;
-    const runs = isProviderConfigured(provider)
-      ? await runThematicEnsemble({ text: nlp.cleaned_text, config })
-      : (() => {
-          demo = true;
-          return generateDemoRuns(nlp.top_keywords, seeds);
-        })();
+    let stoppedEarly = false;
+    let runs;
+    if (isProviderConfigured(provider)) {
+      if (adaptive) {
+        const adaptiveResult = await runAdaptiveEnsemble({
+          text: nlp.cleaned_text,
+          config,
+        });
+        runs = adaptiveResult.runs;
+        stoppedEarly = adaptiveResult.stoppedEarly;
+      } else {
+        runs = await runThematicEnsemble({ text: nlp.cleaned_text, config });
+      }
+    } else {
+      demo = true;
+      runs = generateDemoRuns(nlp.top_keywords, seeds);
+    }
 
     // 3. Reliability + consensus with per-theme lineage. Only successful runs
     // count as raters; failed runs are retained above for the audit trail but
@@ -158,11 +185,14 @@ export async function POST(request: NextRequest) {
     await enrichConsensusWithEvidence(evidenceText, reliability.consensus.themes);
 
     // 5. Pipeline trace for transparency/auditability.
+    const chunkPlan = chunkText(nlp.cleaned_text);
     const pipelineTrace: PipelineTrace = {
       // Characters, not bytes: multi-byte corpora must not misreport size.
       inputChars: nlp.extracted_text?.length ?? nlp.cleaned_text.length,
       cleanedChars: nlp.cleaned_text.length,
-      chunkChars: getTextChunkLength(nlp.cleaned_text),
+      chunkChars: chunkPlan.analyzedChars,
+      chunkCount: chunkPlan.chunks.length,
+      inputTruncated: chunkPlan.truncated,
       preprocessed: true,
       embeddingBackend: reliability.embeddingBackend,
       cosineThreshold,
@@ -192,6 +222,7 @@ export async function POST(request: NextRequest) {
       reliability,
       pipelineTrace,
       demo,
+      stoppedEarly,
     };
 
     return NextResponse.json(result);

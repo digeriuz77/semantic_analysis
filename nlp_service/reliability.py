@@ -34,6 +34,8 @@ from sklearn.metrics import cohen_kappa_score
 _EMBED_MODEL = None
 _EMBED_BACKEND: Optional[str] = None
 _ST_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# Label reported when the semantic model is absent (lexical hashed vectors).
+_FALLBACK_BACKEND = "hashed-lexical"
 # Stateless lexical fallback: hashing is batch-independent, so the cosine
 # between two themes does not change with the rest of the request payload
 # (a per-batch TfidfVectorizer.fit_transform made it do so).
@@ -42,7 +44,7 @@ _FALLBACK_VECTORIZER = HashingVectorizer(n_features=2 ** 16, alternate_sign=Fals
 
 def get_embedding_backend() -> str:
     _ensure_embedder()
-    return _EMBED_BACKEND or "tfidf"
+    return _EMBED_BACKEND or _FALLBACK_BACKEND
 
 
 def _ensure_embedder() -> None:
@@ -56,13 +58,13 @@ def _ensure_embedder() -> None:
         _EMBED_BACKEND = "sentence-transformers"
     except Exception:
         _EMBED_MODEL = None
-        _EMBED_BACKEND = "tfidf"
+        _EMBED_BACKEND = _FALLBACK_BACKEND
 
 
 def embed_texts(texts: List[str]) -> Tuple[np.ndarray, str]:
     """Return L2-normalized embedding matrix (n x d) and the backend name."""
     _ensure_embedder()
-    backend = _EMBED_BACKEND or "tfidf"
+    backend = _EMBED_BACKEND or _FALLBACK_BACKEND
     if len(texts) == 0:
         return np.zeros((0, 1), dtype=float), backend
 
@@ -118,6 +120,86 @@ class _UnionFind:
 
 def _safe_mean(values: List[float], default: float = 0.0) -> float:
     return float(np.mean(values)) if values else default
+
+
+def _mean_pairwise_binary_kappa(presence: np.ndarray) -> float:
+    """Mean Cohen's kappa over all rater pairs for a binary presence matrix.
+
+    ``presence`` is (n_units, n_raters) with 0/1 entries. Vectorized (no
+    sklearn call overhead) so bootstrap resampling stays cheap. Returns NaN
+    when no pair yields a defined kappa (e.g. constant raters).
+    """
+    cols = presence.T.astype(float)  # (n_raters, n_units)
+    if cols.shape[0] < 2:
+        return float("nan")
+    eq = (cols[:, None, :] == cols[None, :, :]).mean(axis=2)  # observed agreement
+    p = cols.mean(axis=1)  # per-rater prevalence of 1
+    pe = p[:, None] * p[None, :] + (1 - p[:, None]) * (1 - p[None, :])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        kmat = (eq - pe) / (1.0 - pe)
+    iu = np.triu_indices(cols.shape[0], k=1)
+    vals = kmat[iu]
+    vals = vals[np.isfinite(vals)]
+    return float(vals.mean()) if vals.size else float("nan")
+
+
+def _nominal_alpha_binary(presence: np.ndarray) -> float:
+    """Krippendorff's nominal alpha for a binary, no-missing-values matrix.
+
+    Units = theme classes, raters = runs, values = present/absent. Returns
+    NaN when undefined (all ratings identical -> D_e == 0).
+    """
+    m = presence.shape[1]  # raters per unit (all runs rate all classes)
+    if m < 2 or presence.shape[0] == 0:
+        return float("nan")
+    n1 = presence.sum(axis=1).astype(float)
+    n0 = m - n1
+    # Observed disagreement: ordered disagreeing pairs within each unit,
+    # normalized by (m_u - 1).
+    d_o = float((2.0 * n1 * n0).sum() / (m - 1.0))
+    # Expected disagreement: ordered disagreeing pairs across all ratings.
+    n_total = float(presence.size)
+    N1 = float(presence.sum())
+    N0 = n_total - N1
+    d_e = 2.0 * N1 * N0 / (n_total - 1.0)
+    if d_e == 0.0:
+        return float("nan")
+    return 1.0 - d_o / d_e
+
+
+def _bootstrap_run_ci(
+    presence: np.ndarray,
+    stat_fns: List[Any],
+    n_boot: int = 400,
+    seed: int = 0,
+) -> List[Optional[List[float]]]:
+    """Bootstrap CIs over run resamples (columns drawn with replacement).
+
+    Conditional on the discovered theme classes: the class structure is held
+    fixed and only the rater (run) dimension is resampled — the honest thing
+    to do cheaply, since re-clustering per resample would change the units
+    themselves. Returns a 95% percentile CI per stat fn, or None when too
+    few resamples yield a defined statistic (tiny rater counts).
+    """
+    rng = np.random.default_rng(seed)
+    n_runs = presence.shape[1]
+    collected: List[List[float]] = [[] for _ in stat_fns]
+    for _ in range(n_boot):
+        idx = rng.integers(0, n_runs, n_runs)
+        sub = presence[:, idx]
+        for f_idx, fn in enumerate(stat_fns):
+            v = fn(sub)
+            if v is not None and np.isfinite(v):
+                collected[f_idx].append(float(v))
+    out: List[Optional[List[float]]] = []
+    min_valid = max(20, int(0.1 * n_boot))
+    for vals in collected:
+        if len(vals) < min_valid:
+            out.append(None)
+        else:
+            lo, hi = np.percentile(vals, [2.5, 97.5])
+            out.append([round(float(lo), 4), round(float(hi), 4)])
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +264,7 @@ def compute_reliability(
             "minOccurrenceRatio": min_occurrence_ratio,
             "consensus": {"themes": [], "totalRuns": n_runs},
             "kappa": None,
+            "alpha": None,
             "cosine": None,
             "saturation": [],
             "truncated": truncated,
@@ -209,7 +292,11 @@ def compute_reliability(
         for m in members:
             presence[c_idx, flat[m]["run"]] = 1
 
-    min_occurrence = max(1, int(np.ceil(min_occurrence_ratio * n_runs)))
+    # A theme seen in a single run is never "consensus", even at low ratios
+    # (ceil(0.5 * 2) == 1 would otherwise admit 1-of-2 themes).
+    min_occurrence = int(np.ceil(min_occurrence_ratio * n_runs))
+    if n_runs >= 2:
+        min_occurrence = max(min_occurrence, 2)
 
     consensus_themes: List[Dict[str, Any]] = []
     for members in class_lists:
@@ -299,6 +386,28 @@ def compute_reliability(
             "band": _kappa_band(mean_k),
         }
 
+    # --- Krippendorff's alpha + bootstrap CIs over run resamples ---
+    # Alpha handles multiple raters directly (unlike pairwise-mean kappa) and
+    # tolerates degenerate rater profiles. Presence/absence over classes is a
+    # binary nominal metric. CIs are conditional on the discovered classes.
+    alpha_value = _nominal_alpha_binary(presence)
+    alpha_result: Optional[Dict[str, Any]] = None
+    if np.isfinite(alpha_value):
+        alpha_result = {
+            "value": round(float(alpha_value), 4),
+            "ci95": None,
+        }
+    if presence.shape[0] >= 2 and presence.shape[1] >= 2:
+        kappa_ci, alpha_ci = _bootstrap_run_ci(
+            presence,
+            [_mean_pairwise_binary_kappa, _nominal_alpha_binary],
+            n_boot=400,
+        )
+        if kappa_result is not None:
+            kappa_result["ci95"] = kappa_ci
+        if alpha_result is not None:
+            alpha_result["ci95"] = alpha_ci
+
     # --- Cosine similarity between run centroids (semantic consistency) ---
     dim = vecs.shape[1]
     centroids = np.zeros((n_runs, dim), dtype=float)
@@ -365,6 +474,7 @@ def compute_reliability(
         "minOccurrenceRatio": min_occurrence_ratio,
         "consensus": {"themes": consensus_themes, "totalRuns": n_runs},
         "kappa": kappa_result,
+        "alpha": alpha_result,
         "cosine": cosine_result,
         "saturation": saturation_curve,
         "truncated": truncated,

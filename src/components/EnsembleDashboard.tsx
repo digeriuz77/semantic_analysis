@@ -183,10 +183,11 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
 // ---------------------------------------------------------------------------
 
 function ReliabilityTab({ result }: { result: EnsembleResult }) {
-  const { kappa, cosine, embeddingBackend, runCount, saturation } = result.reliability;
+  const { kappa, alpha, cosine, embeddingBackend, runCount, saturation } = result.reliability;
   const paradigmId = result.config.paradigm;
   const paradigm = paradigmId ? PARADIGMS[paradigmId] : null;
   const foregroundKappa = paradigm ? paradigm.foregroundKappa : true;
+  const semanticBackend = embeddingBackend === "sentence-transformers";
 
   if (runCount < 2) {
     return (
@@ -204,7 +205,21 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
         <TrustworthinessCard paradigm={paradigm} hasKappa={Boolean(kappa)} />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {!semanticBackend && (
+        <div className="flex items-start gap-3 bg-amber-900/20 border border-amber-700/50 rounded-xl p-4">
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5" />
+          <p className="text-amber-200 text-sm">
+            <span className="font-semibold">Lexical fallback embeddings.</span>{" "}
+            The semantic model (sentence-transformers) is not installed in the
+            NLP service, so themes are compared by hashed lexical overlap.
+            Paraphrases that share no words will not cluster — install{" "}
+            <code className="text-amber-300">sentence-transformers</code> for
+            semantic (paraphrase-aware) matching before interpreting thresholds.
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <MetricCard
           title={
             paradigm && !paradigm.kappaAppropriate
@@ -217,6 +232,17 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
           ) : (
             <p className="text-slate-400 text-sm">
               Insufficient categorical overlap to compute κ across runs.
+            </p>
+          )}
+        </MetricCard>
+
+        <MetricCard title="Krippendorff's α">
+          {alpha ? (
+            <AlphaDisplay alpha={alpha} />
+          ) : (
+            <p className="text-slate-400 text-sm">
+              α undefined for this run profile (requires disagreement or
+              variation across runs).
             </p>
           )}
         </MetricCard>
@@ -241,7 +267,9 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
       <p className="text-xs text-slate-500">
         Embedding backend:{" "}
         <span className="text-slate-300 font-mono">{embeddingBackend}</span>. κ
-        uses theme presence/absence (Landis &amp; Koch bands); cosine uses
+        uses theme presence/absence (Landis &amp; Koch bands); α is the
+        multi-rater nominal statistic with a bootstrap 95% CI (400 run
+        resamples, conditional on the discovered classes); cosine uses
         run-centroid similarity over theme embeddings.
         {paradigm && !paradigm.kappaAppropriate && (
           <>
@@ -315,7 +343,7 @@ function SaturationCard({
       <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
         <h4 className="text-white font-semibold text-sm flex items-center gap-2">
           <TrendingUp size={16} className="text-teal-400" />
-          Theoretical saturation curve
+          Theme-discovery curve
         </h4>
         <span
           className={`text-xs px-2 py-0.5 rounded-full border ${
@@ -325,14 +353,15 @@ function SaturationCard({
           }`}
         >
           {plateaued
-            ? "Saturation likely reached"
+            ? "No new themes in last run"
             : "New themes still emerging"}
         </span>
       </div>
       <p className="text-slate-500 text-xs mb-4 max-w-2xl">
-        Distinct theme classes discovered as runs accumulate. Saturation is a
-        process, not a fixed number — when additional runs add no new classes,
-        the analysis has likely saturated.
+        Distinct theme classes discovered as runs accumulate. This is a
+        discovery curve over ≤{runCount} runs of one model — a plateau suggests
+        (but does not prove) saturation; saturation is a process, not a fixed
+        number.
       </p>
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
@@ -374,12 +403,52 @@ function KappaDisplay({
           {KAPPA_BAND_LABEL[band]}
         </span>
       </div>
+      {kappa.ci95 && (
+        <p className="text-slate-500 text-xs mt-1 font-mono">
+          95% CI [{kappa.ci95[0].toFixed(3)}, {kappa.ci95[1].toFixed(3)}]
+        </p>
+      )}
       <p className="text-slate-400 text-sm mt-3">
         Range: {kappa.minKappa.toFixed(3)} – {kappa.maxKappa.toFixed(3)} across{" "}
         {kappa.pairwise.length} run pairs.{" "}
         <span className="text-slate-300">
           {KAPPA_BAND_DESCRIPTION[band]}
         </span>
+      </p>
+    </div>
+  );
+}
+
+function AlphaDisplay({
+  alpha,
+}: {
+  alpha: NonNullable<EnsembleResult["reliability"]["alpha"]>;
+}) {
+  const v = alpha.value;
+  const label =
+    v >= 0.8 ? "High" : v >= 0.667 ? "Acceptable" : v >= 0.4 ? "Tentative" : "Unreliable";
+  const color = v >= 0.8 ? "#0d9488" : v >= 0.667 ? "#3b82f6" : v >= 0.4 ? "#f59e0b" : "#ef4444";
+  return (
+    <div>
+      <div className="flex items-end gap-4">
+        <div className="text-5xl font-bold font-mono" style={{ color }}>
+          {v.toFixed(3)}
+        </div>
+        <span
+          className="mb-1 text-sm font-semibold px-3 py-1 rounded-full border"
+          style={{ color, borderColor: color, backgroundColor: `${color}22` }}
+        >
+          {label}
+        </span>
+      </div>
+      {alpha.ci95 && (
+        <p className="text-slate-500 text-xs mt-1 font-mono">
+          95% CI [{alpha.ci95[0].toFixed(3)}, {alpha.ci95[1].toFixed(3)}]
+        </p>
+      )}
+      <p className="text-slate-400 text-sm mt-3">
+        Krippendorff recommends α ≥ 0.80 (≥ 0.667 for tentative conclusions).
+        Multi-rater statistic over all runs jointly — no pairwise averaging.
       </p>
     </div>
   );
@@ -778,14 +847,27 @@ function PipelineTab({ result }: { result: EnsembleResult }) {
   const rows: { label: string; value: string; hint?: string }[] = [
     { label: "Input size", value: `${t.inputChars.toLocaleString()} chars`, hint: "text extracted from upload" },
     { label: "After cleaning", value: `${t.cleanedChars.toLocaleString()} chars`, hint: "NLTK preprocessing applied" },
-    { label: "Sent to LLM", value: `${t.chunkChars.toLocaleString()} chars`, hint: "truncated chunk per run" },
+    {
+      label: "Sent to LLM",
+      value: `${t.chunkChars.toLocaleString()} chars`,
+      hint: t.chunkCount && t.chunkCount > 1
+        ? `analyzed in ${t.chunkCount} chunks per run, themes merged`
+        : "single chunk per run",
+    },
     { label: "Preprocessing", value: t.preprocessed ? "tokenize · lemmatize · stopwords" : "none" },
-    { label: "Embedding backend", value: t.embeddingBackend, hint: "used for κ + cosine + evidence" },
+    { label: "Embedding backend", value: t.embeddingBackend, hint: "used for κ + α + cosine + evidence" },
     { label: "Cosine threshold", value: t.cosineThreshold.toFixed(2), hint: "theme-equivalence cutoff" },
     { label: "Min occurrence ratio", value: `${Math.round(t.minOccurrenceRatio * 100)}%`, hint: "consensus threshold" },
     { label: "Temperature", value: t.temperature.toFixed(1), hint: "LLM sampling randomness" },
     { label: "Seeds", value: t.seeds.join(", "), hint: `${t.seeds.length} independent runs` },
   ];
+  if (t.inputTruncated) {
+    rows.push({
+      label: "Input truncated",
+      value: "yes",
+      hint: "document exceeded the per-run chunk budget (4 × 8,000 chars)",
+    });
+  }
   if (t.failedRunCount && t.failedRunCount > 0) {
     rows.push({
       label: "Excluded runs",

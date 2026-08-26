@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { ProcessingView } from "@/components/ProcessingView";
 import { EnsembleDashboard } from "@/components/EnsembleDashboard";
@@ -23,6 +23,9 @@ import { Upload, BarChart3, Microscope, GitCompare, AlertCircle, Compass, Clipbo
 
 type View = "upload" | "design" | "configure" | "results" | "specialist" | "compare" | "coreq";
 
+/** Files analyzed concurrently; low to be polite to provider rate limits. */
+const FILE_CONCURRENCY = 2;
+
 export default function AnalyzerPage() {
   const [view, setView] = useState<View>("upload");
   const [files, setFiles] = useState<File[]>([]);
@@ -37,6 +40,7 @@ export default function AnalyzerPage() {
   const [processingStep, setProcessingStep] = useState("");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const cancelRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetch("/api/providers")
@@ -80,51 +84,77 @@ export default function AnalyzerPage() {
     setError(null);
     setProgress(0);
     setProcessingStep("Preprocessing corpus (NLTK)…");
+    const controller = new AbortController();
+    cancelRef.current = controller;
     const out: EnsembleResult[] = [];
 
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        setProcessingStep(
-          `Analyzing ${file.name} (${i + 1}/${files.length}) — ensemble of ${runConfig.seeds.length} run${runConfig.seeds.length === 1 ? "" : "s"}…`
-        );
+    const analyzeFile = async (file: File, index: number): Promise<void> => {
+      setProcessingStep(
+        `Analyzing ${file.name} (${index + 1}/${files.length}) — ensemble of ${runConfig.seeds.length} run${runConfig.seeds.length === 1 ? "" : "s"}…`
+      );
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("seeds", runConfig.seeds.join(","));
-        formData.append("temperature", String(runConfig.temperature));
-        formData.append("model", runConfig.model);
-        formData.append("provider", runConfig.provider);
-        formData.append("cosineThreshold", String(runConfig.cosineThreshold ?? 0.7));
-        formData.append("minOccurrenceRatio", String(runConfig.minOccurrenceRatio ?? 0.5));
-        if (runConfig.promptTemplate) {
-          formData.append("promptTemplate", runConfig.promptTemplate);
-        }
-        if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
-        if (runConfig.framework) formData.append("framework", runConfig.framework);
-        if (runConfig.adaptive) formData.append("adaptive", "true");
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("seeds", runConfig.seeds.join(","));
+      formData.append("temperature", String(runConfig.temperature));
+      formData.append("model", runConfig.model);
+      formData.append("provider", runConfig.provider);
+      formData.append("cosineThreshold", String(runConfig.cosineThreshold ?? 0.7));
+      formData.append("minOccurrenceRatio", String(runConfig.minOccurrenceRatio ?? 0.5));
+      if (runConfig.promptTemplate) {
+        formData.append("promptTemplate", runConfig.promptTemplate);
+      }
+      if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
+      if (runConfig.framework) formData.append("framework", runConfig.framework);
+      if (runConfig.adaptive) formData.append("adaptive", "true");
 
-        const res = await fetch("/api/analyze-ensemble", {
-          method: "POST",
-          body: formData,
-        });
+      const res = await fetch("/api/analyze-ensemble", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
 
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || `Analysis failed (${res.status})`);
-        }
-
-        out.push((await res.json()) as EnsembleResult);
-        setProgress(((i + 1) / files.length) * 100);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Analysis failed (${res.status})`);
       }
 
+      out[index] = await res.json();
+      setProgress((out.filter(Boolean).length / files.length) * 100);
+    };
+
+    // Small worker pool: parallel across files without hammering the provider.
+    const runWithPool = async (): Promise<void> => {
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        while (next < files.length) {
+          const index = next++;
+          await analyzeFile(files[index], index);
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(FILE_CONCURRENCY, files.length) }, worker)
+      );
+    };
+
+    try {
+      await runWithPool();
       setResults(out);
       setView("results");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Analysis failed.");
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("Analysis canceled.");
+      } else {
+        setError(e instanceof Error ? e.message : "Analysis failed.");
+      }
     } finally {
+      cancelRef.current = null;
       setIsProcessing(false);
     }
+  };
+
+  const cancelRun = () => {
+    cancelRef.current?.abort();
   };
 
   const handleSpecialist = async () => {
@@ -265,7 +295,9 @@ export default function AnalyzerPage() {
         </div>
       )}
 
-      {isProcessing && view !== "compare" && <ProcessingView step={processingStep} progress={progress} />}
+      {isProcessing && view !== "compare" && (
+        <ProcessingView step={processingStep} progress={progress} onCancel={cancelRun} />
+      )}
 
       {!isProcessing && view === "upload" && (
         <div>

@@ -1,13 +1,15 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, XCircle } from "lucide-react";
 
 interface ProcessingViewProps {
   step: string;
   progress: number;
+  /** When provided, a cancel button is shown (aborts in-flight requests). */
+  onCancel?: () => void;
 }
 
-export function ProcessingView({ step, progress }: ProcessingViewProps) {
+export function ProcessingView({ step, progress, onCancel }: ProcessingViewProps) {
   return (
     <div className="flex flex-col items-center justify-center py-24 animate-in fade-in duration-500">
       <div className="relative w-24 h-24 mb-8">
@@ -27,6 +29,15 @@ export function ProcessingView({ step, progress }: ProcessingViewProps) {
           style={{ width: `${Math.min(progress, 100)}%` }}
         />
       </div>
+
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="mt-6 flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm transition-colors"
+        >
+          <XCircle size={15} /> Cancel analysis
+        </button>
+      )}
 
       <div className="mt-8 grid grid-cols-3 gap-8 text-center opacity-60">
         <div className="flex flex-col items-center gap-2">

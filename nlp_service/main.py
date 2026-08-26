@@ -11,7 +11,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.probability import FreqDist
 from collections import Counter
 
-from reliability import compute_reliability, embed_texts
+from reliability import compute_reliability, embed_texts, get_embedding_backend
 
 # Try importing optional heavy dependencies
 try:
@@ -26,12 +26,13 @@ try:
 except ImportError:
     DOCX_SUPPORT = False
 
-# Initialize NLTK data
+# Initialize NLTK data (both tagger names: resource renamed in NLTK 3.9).
 nltk.download("punkt", quiet=True)
 nltk.download("punkt_tab", quiet=True)
 nltk.download("stopwords", quiet=True)
 nltk.download("wordnet", quiet=True)
 nltk.download("averaged_perceptron_tagger", quiet=True)
+nltk.download("averaged_perceptron_tagger_eng", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 
 # VADER sentiment analyzer (validated lexicon; degrades to heuristic if absent).
@@ -350,7 +351,7 @@ async def health_check():
     return {
         "status": "healthy",
         "nltk_data": "loaded",
-        "embedding_backend": "sentence-transformers" if _ST_AVAILABLE() else "tfidf",
+        "embedding_backend": get_embedding_backend(),
     }
 
 

@@ -4,6 +4,7 @@ import { runThematicEnsemble, filterSuccessfulRuns } from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
 import { PROVIDER_LABEL } from "@/lib/providers";
+import { rateLimit, clientKey } from "@/lib/rateLimit";
 import type {
   ConsensusTheme,
   KappaBand,
@@ -18,6 +19,8 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+/** Up to 6 models x 24 LLM calls each: keep the budget tight. */
+const RATE_LIMIT = { limit: 5, windowMs: 5 * 60_000 };
 
 interface CompareSpec {
   provider: LlmProvider;
@@ -54,6 +57,14 @@ function parseNumber(v: string | null, fallback: number, min: number, max: numbe
  */
 export async function POST(request: NextRequest) {
   try {
+    const rl = rateLimit(clientKey(request), RATE_LIMIT.limit, RATE_LIMIT.windowMs);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many comparisons. Please wait a moment and retry." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     if (!file) {

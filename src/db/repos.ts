@@ -591,3 +591,60 @@ export function semanticSearch(
   hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, topK);
 }
+
+// ---------------------------------------------------------------------------
+// COREQ checklist
+// ---------------------------------------------------------------------------
+
+export interface CoreqResponseRow {
+  itemId: number;
+  checked: boolean;
+  detail: string;
+  updatedAt: string;
+}
+
+function sanitizeStudyKey(study: string): string {
+  const key = study.trim().slice(0, 120);
+  return key.length > 0 ? key : "default";
+}
+
+/** Load all COREQ responses for a study (empty object when none saved). */
+export function getCoreqResponses(study: string): Record<number, CoreqResponseRow> {
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT itemId, checked, detail, updatedAt FROM coreq_responses WHERE studyKey = ?")
+    .all(sanitizeStudyKey(study));
+  const out: Record<number, CoreqResponseRow> = {};
+  for (const r of rows) {
+    const itemId = Number(r.itemId);
+    if (!Number.isInteger(itemId) || itemId < 1 || itemId > 32) continue;
+    out[itemId] = {
+      itemId,
+      checked: Number(r.checked) === 1,
+      detail: typeof r.detail === "string" ? r.detail : "",
+      updatedAt: String(r.updatedAt),
+    };
+  }
+  return out;
+}
+
+/** Upsert one item's response for a study. */
+export function upsertCoreqResponse(
+  study: string,
+  itemId: number,
+  checked: boolean,
+  detail: string
+): CoreqResponseRow {
+  const db = getDb();
+  const key = sanitizeStudyKey(study);
+  const id = Number.isInteger(itemId) && itemId >= 1 && itemId <= 32 ? itemId : 0;
+  if (!id) throw new Error("itemId must be 1..32");
+  const ts = now();
+  db.prepare(
+    `INSERT INTO coreq_responses (studyKey, itemId, checked, detail, updatedAt)
+     VALUES (?,?,?,?,?)
+     ON CONFLICT(studyKey, itemId) DO UPDATE SET
+       checked = excluded.checked, detail = excluded.detail, updatedAt = excluded.updatedAt`
+  ).run(key, id, checked ? 1 : 0, detail.slice(0, 4000), ts);
+  return { itemId: id, checked, detail, updatedAt: ts };
+}
