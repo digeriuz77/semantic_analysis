@@ -30,15 +30,25 @@ function persistResponses(r: Record<number, CoreqResponse>) {
   }
 }
 
-/** Fire-and-forget server persistence (SQLite outlives browser data resets). */
+/** Server persistence, debounced per item so typing does not POST per keystroke. */
+const pendingSaves = new Map<string, number>();
+
 function saveToServer(study: string, id: number, next: CoreqResponse) {
-  fetch("/api/coreq", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ study, itemId: id, checked: next.checked, detail: next.detail }),
-  }).catch(() => {
-    /* offline: localStorage cache still holds the change */
-  });
+  const key = `${study}::${id}`;
+  if (pendingSaves.has(key)) {
+    clearTimeout(pendingSaves.get(key));
+  }
+  const timer = setTimeout(() => {
+    pendingSaves.delete(key);
+    fetch("/api/coreq", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ study, itemId: id, checked: next.checked, detail: next.detail }),
+    }).catch(() => {
+      /* offline: localStorage cache still holds the change */
+    });
+  }, 500) as unknown as number;
+  pendingSaves.set(key, timer);
 }
 
 function loadStudy(): string {

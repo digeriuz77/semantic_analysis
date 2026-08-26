@@ -169,8 +169,8 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
           <p className="text-teal-200 text-sm">
             <span className="font-semibold">Adaptive stop.</span> The ensemble
             stopped early after {result.runs.length} run{result.runs.length === 1 ? "" : "s"} —
-            two consecutive runs added no new theme names, indicating a
-            theoretical-saturation plateau.
+            two consecutive successful runs added no new theme names,
+            indicating a discovery plateau.
           </p>
         </div>
       )}

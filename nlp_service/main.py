@@ -287,7 +287,9 @@ async def embed_endpoint(request: Request):
     texts = body.get("texts", [])
     if not isinstance(texts, list):
         raise HTTPException(status_code=400, detail="'texts' must be a list")
-    vecs, backend = embed_texts([str(t) for t in texts])
+    if len(texts) > 500:
+        raise HTTPException(status_code=400, detail="Too many texts (max 500)")
+    vecs, backend = embed_texts([str(t)[:5000] for t in texts])
     return {
         "vectors": vecs.tolist(),
         "dim": int(vecs.shape[1]) if vecs.size else 0,

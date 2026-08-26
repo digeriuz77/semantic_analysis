@@ -1,5 +1,5 @@
 /** Smoke test for the new ensemble TS logic. Run: bun run nlp_service/test_ensemble.ts */
-import { chunkText, filterSuccessfulRuns } from "../src/lib/ensemble";
+import { chunkText, filterSuccessfulRuns, runAdaptiveEnsemble } from "../src/lib/ensemble";
 import type { ThemeRun } from "../src/types";
 
 let pass = 0;
@@ -52,6 +52,26 @@ const mk = (status?: "ok" | "parse_failed" | "request_failed"): ThemeRun => ({
 });
 const filtered = filterSuccessfulRuns([mk("ok"), mk("parse_failed"), mk("request_failed"), mk(undefined)]);
 check("failed runs filtered, ok + provenance-less kept", filtered.length === 2);
+
+// --- adaptive: all-failing runs must NOT trigger the saturation early-stop ---
+// No API key in the test env -> every adapter call fails -> regression guard
+// for the bug where 2 consecutive failures counted as a "discovery plateau".
+delete process.env.FIREWORKS_API_KEY;
+delete process.env.OPENAI_API_KEY;
+const adaptive = await runAdaptiveEnsemble({
+  text: "some corpus text here",
+  config: {
+    seeds: [1, 2, 3, 4, 5, 6],
+    temperature: 0.7,
+    model: "test-model",
+    provider: "fireworks",
+  },
+});
+check("all-failing runs: all seeds attempted (no false plateau)",
+  adaptive.runs.length === 6 && !adaptive.stoppedEarly,
+  `runs=${adaptive.runs.length} stoppedEarly=${adaptive.stoppedEarly}`);
+check("all-failing runs: every run recorded as request_failed",
+  adaptive.runs.every((r) => r.provenance?.status === "request_failed"));
 
 console.log();
 console.log(`RESULT: ${pass} passed, ${fail} failed`);

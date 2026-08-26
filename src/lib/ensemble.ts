@@ -187,8 +187,11 @@ export interface AdaptiveEnsembleResult {
 
 /**
  * Adaptive ensemble: run seeds sequentially and stop early once two
- * consecutive runs add no new theme names (an exact-name discovery plateau)
- * after at least 3 runs. Saves LLM spend on corpora that saturate quickly.
+ * consecutive *successful* runs add no new theme names (an exact-name
+ * discovery plateau) after at least 3 successful runs. Saves LLM spend on
+ * corpora that saturate quickly. Failed runs never count toward the plateau:
+ * they add no names, but absence of themes from a failed request is not
+ * evidence of saturation (two API failures must not stop the ensemble).
  * Trade-off: no parallelism, so wall time is proportional to runs executed.
  */
 export async function runAdaptiveEnsemble({
@@ -204,11 +207,16 @@ export async function runAdaptiveEnsemble({
 
   const runs: ThemeRun[] = [];
   const seenNames = new Set<string>();
+  let successfulRuns = 0;
   let runsSinceNewTheme = 0;
 
   for (const seed of config.seeds) {
     const run = await runOneSeed({ adapter, template, plan, seed, config, cap });
     runs.push(run);
+    const failed = run.provenance?.status !== undefined && run.provenance.status !== "ok";
+    if (failed) continue;
+
+    successfulRuns += 1;
     const newNames = run.themes
       .map((t) => t.name.trim().toLowerCase())
       .filter((n) => n.length > 0 && !seenNames.has(n));
@@ -218,7 +226,7 @@ export async function runAdaptiveEnsemble({
     } else {
       runsSinceNewTheme += 1;
     }
-    if (runs.length >= 3 && runsSinceNewTheme >= 2) {
+    if (successfulRuns >= 3 && runsSinceNewTheme >= 2) {
       return { runs, stoppedEarly: true };
     }
   }
