@@ -192,7 +192,7 @@ export interface ConsensusResult {
 
 /** Records every transformation applied to the data (pipeline transparency). */
 export interface PipelineTrace {
-  /** Source character count before preprocessing. */
+  /** Source character count before preprocessing (extracted text, not bytes). */
   inputChars: number;
   /** Cleaned-text character count after preprocessing. */
   cleanedChars: number;
@@ -210,6 +210,10 @@ export interface PipelineTrace {
   /** Research design choices recorded for transparency. */
   paradigm?: ParadigmId;
   framework?: FrameworkId;
+  /** Runs excluded from reliability scoring (request/parse failures). */
+  failedRunCount?: number;
+  /** Runs actually scored by the reliability engine. */
+  reliabilityRunCount?: number;
 }
 
 /** One point on the theoretical-saturation curve. */
@@ -229,6 +233,8 @@ export interface ReliabilityReport {
   cosine: CosineResult | null;
   /** Theoretical-saturation curve: distinct theme classes per run prefix. */
   saturation: SaturationPoint[];
+  /** True when the engine capped the number of themes it clustered. */
+  truncated?: boolean;
 }
 
 /** A researcher's case-by-case judgement on a consensus theme. */

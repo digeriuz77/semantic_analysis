@@ -16,6 +16,8 @@ export class NlpUnavailableError extends Error {
 
 export interface NlpProcessResponse {
   cleaned_text: string;
+  /** Punctuation-preserving extraction (used for evidence retrieval). */
+  extracted_text?: string;
   stats: Record<string, number>;
   top_keywords: { word: string; count: number }[];
   sentiment?: { positive: number; neutral: number; negative: number };

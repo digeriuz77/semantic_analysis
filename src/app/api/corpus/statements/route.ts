@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createStatement, listStatements } from "@/db/repos";
-import type { CreateStatementInput, StatementFilter, Stance } from "@/types/corpus";
+import { createStatement, listStatements, type CreateStatementInput } from "@/db/repos";
+import type { StatementFilter, Stance } from "@/types/corpus";
 
 const STANCES: Stance[] = ["agree", "disagree", "neutral", "undefined"];
 

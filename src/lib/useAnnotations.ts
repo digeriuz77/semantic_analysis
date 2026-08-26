@@ -6,7 +6,7 @@ import type { ThemeAnnotation } from "@/types";
 /**
  * Persists researcher annotations per analysis to localStorage so case-by-case
  * judgements survive page reloads (full DB-backed persistence arrives in
- * Phase 5). Keyed by analysis id + theme label.
+ * Phase 5). Keyed by analysis id + consensus-theme index (labels can collide).
  */
 const STORAGE_PREFIX = "ta:annotations:";
 

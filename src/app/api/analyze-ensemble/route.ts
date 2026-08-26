@@ -6,9 +6,14 @@ import {
   processFileViaNlp,
   NlpUnavailableError,
 } from "@/lib/nlp";
-import { runThematicEnsemble, getTextChunkLength } from "@/lib/ensemble";
+import {
+  runThematicEnsemble,
+  getTextChunkLength,
+  filterSuccessfulRuns,
+} from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
+import { ALL_PROVIDERS } from "@/lib/providers";
 import type {
   EnsembleResult,
   FrameworkId,
@@ -18,8 +23,12 @@ import type {
   RunConfig,
 } from "@/types";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CLIENT_TEXT_CHARS = 8000;
+const MAX_EVIDENCE_TEXT_CHARS = 40_000;
 
 const DEFAULT_SEEDS = [42, 123, 456, 789, 1011, 1213];
 const DEFAULT_MODEL = "accounts/fireworks/models/llama-v3-70b-instruct";
@@ -77,8 +86,15 @@ export async function POST(request: NextRequest) {
       2
     );
     const model = (formData.get("model") as string | null) || DEFAULT_MODEL;
-    const provider = ((formData.get("provider") as string | null) ||
-      "fireworks") as LlmProvider;
+    const provider = (
+      (formData.get("provider") as string | null) || "fireworks"
+    ) as LlmProvider;
+    if (!ALL_PROVIDERS.includes(provider)) {
+      return NextResponse.json(
+        { error: `Unknown provider "${provider}"` },
+        { status: 400 }
+      );
+    }
     const cosineThreshold = parseNumber(
       formData.get("cosineThreshold") as string | null,
       0.7,
@@ -108,12 +124,16 @@ export async function POST(request: NextRequest) {
       framework,
     };
 
-    const inputChars = file.size;
-
     // 1. NLP preprocessing (server-side; file never reaches the browser raw).
     const nlp = await processFileViaNlp(file);
     const sentiment = nlp.sentiment ?? { positive: 33, neutral: 34, negative: 33 };
     const cleanedText = nlp.cleaned_text.slice(0, MAX_CLIENT_TEXT_CHARS);
+    // Punctuation-preserving text: sent_tokenize in /evidence needs sentence
+    // boundaries that clean_text (which strips punctuation) destroys.
+    const evidenceText = (nlp.extracted_text ?? nlp.cleaned_text).slice(
+      0,
+      MAX_EVIDENCE_TEXT_CHARS
+    );
 
     // 2. Ensemble runs (each carries full provenance).
     let demo = false;
@@ -124,18 +144,23 @@ export async function POST(request: NextRequest) {
           return generateDemoRuns(nlp.top_keywords, seeds);
         })();
 
-    // 3. Reliability + consensus with per-theme lineage.
-    const reliability = await callReliability(runs, {
+    // 3. Reliability + consensus with per-theme lineage. Only successful runs
+    // count as raters; failed runs are retained above for the audit trail but
+    // excluded here so they cannot deflate kappa/cosine/consensus.
+    const successfulRuns = filterSuccessfulRuns(runs);
+    const failedRunCount = runs.length - successfulRuns.length;
+    const reliability = await callReliability(successfulRuns, {
       cosineThreshold,
       minOccurrenceRatio,
     });
 
     // 4. Evidence grounding: retrieve supporting source spans per consensus theme.
-    await enrichConsensusWithEvidence(cleanedText, reliability.consensus.themes);
+    await enrichConsensusWithEvidence(evidenceText, reliability.consensus.themes);
 
     // 5. Pipeline trace for transparency/auditability.
     const pipelineTrace: PipelineTrace = {
-      inputChars,
+      // Characters, not bytes: multi-byte corpora must not misreport size.
+      inputChars: nlp.extracted_text?.length ?? nlp.cleaned_text.length,
       cleanedChars: nlp.cleaned_text.length,
       chunkChars: getTextChunkLength(nlp.cleaned_text),
       preprocessed: true,
@@ -146,6 +171,8 @@ export async function POST(request: NextRequest) {
       seeds,
       paradigm,
       framework,
+      failedRunCount,
+      reliabilityRunCount: successfulRuns.length,
     };
 
     const result: EnsembleResult = {

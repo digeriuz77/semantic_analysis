@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callReliability, processFileViaNlp, NlpUnavailableError } from "@/lib/nlp";
-import { runThematicEnsemble } from "@/lib/ensemble";
+import { runThematicEnsemble, filterSuccessfulRuns } from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
 import { isProviderConfigured } from "@/lib/llm";
 import { PROVIDER_LABEL } from "@/lib/providers";
@@ -13,6 +13,9 @@ import type {
   RunConfig,
   ThemeRun,
 } from "@/types";
+
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -106,7 +109,10 @@ export async function POST(request: NextRequest) {
                 return generateDemoRuns(nlp.top_keywords, seeds);
               })();
 
-          const reliability = await callReliability(runs, { cosineThreshold, minOccurrenceRatio });
+          const reliability = await callReliability(
+            filterSuccessfulRuns(runs),
+            { cosineThreshold, minOccurrenceRatio }
+          );
           const consensusThemes = reliability.consensus.themes;
           perModelConsensus.push(consensusThemes);
 

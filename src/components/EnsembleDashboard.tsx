@@ -58,10 +58,12 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
   const [activeFile, setActiveFile] = useState(0);
   const [tab, setTab] = useState<Tab>("reliability");
   const [selectedThemeIdx, setSelectedThemeIdx] = useState<number | null>(null);
-  const result = results[activeFile];
+  const result = results[Math.min(activeFile, Math.max(results.length - 1, 0))];
   const { annotations, annotate } = useAnnotations(result.id);
 
-  // Lineage drill-down view takes over the panel.
+  // Lineage drill-down view takes over the panel. Annotations are keyed by
+  // consensus-theme index (not label): duplicate labels are possible and would
+  // otherwise cross-contaminate researcher judgements.
   if (selectedThemeIdx !== null) {
     const theme = result.reliability.consensus.themes[selectedThemeIdx];
     if (theme) {
@@ -71,8 +73,8 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
             theme={theme}
             themeIndex={selectedThemeIdx}
             runSeeds={result.runs.map((r) => r.seed)}
-            annotation={annotations[theme.label]}
-            onAnnotate={annotate}
+            annotation={annotations[String(selectedThemeIdx)]}
+            onAnnotate={(a) => annotate(String(selectedThemeIdx), a)}
             onBack={() => setSelectedThemeIdx(null)}
           />
         </div>
@@ -493,15 +495,15 @@ function ConsensusTab({
   annotations: Record<string, ThemeAnnotation>;
   onSelectTheme: (idx: number) => void;
 }) {
-  const themes: ConsensusTheme[] = result.reliability.consensus.themes;
   const allThemes = result.reliability.consensus.themes;
-  const high = themes.filter((t) => t.tier === "high");
-  const moderate = themes.filter((t) => t.tier === "moderate");
+  const high = allThemes
+    .map((theme, idx) => ({ theme, idx }))
+    .filter(({ theme }) => theme.tier === "high");
+  const moderate = allThemes
+    .map((theme, idx) => ({ theme, idx }))
+    .filter(({ theme }) => theme.tier === "moderate");
 
-  const indexByLabel = (label: string) =>
-    allThemes.findIndex((t) => t.label === label);
-
-  if (themes.length === 0) {
+  if (allThemes.length === 0) {
     return (
       <InfoBox>
         No themes met the consensus threshold ({Math.round((result.config.minOccurrenceRatio ?? 0.5) * 100)}%
@@ -519,16 +521,14 @@ function ConsensusTab({
       <ThemeGroup
         title="High confidence"
         subtitle={`Appears in ≥83% of runs (${result.reliability.runCount})`}
-        themes={high}
-        allThemes={allThemes}
+        entries={high}
         annotations={annotations}
         onSelectTheme={onSelectTheme}
       />
       <ThemeGroup
         title="Moderate confidence"
         subtitle={`Appears in 50–66% of runs — warrants researcher review`}
-        themes={moderate}
-        allThemes={allThemes}
+        entries={moderate}
         annotations={annotations}
         onSelectTheme={onSelectTheme}
       />
@@ -539,19 +539,17 @@ function ConsensusTab({
 function ThemeGroup({
   title,
   subtitle,
-  themes,
-  allThemes,
+  entries,
   annotations,
   onSelectTheme,
 }: {
   title: string;
   subtitle: string;
-  themes: ConsensusTheme[];
-  allThemes: ConsensusTheme[];
+  entries: { theme: ConsensusTheme; idx: number }[];
   annotations: Record<string, ThemeAnnotation>;
   onSelectTheme: (idx: number) => void;
 }) {
-  if (themes.length === 0) return null;
+  if (entries.length === 0) return null;
   return (
     <div>
       <div className="mb-3">
@@ -559,17 +557,14 @@ function ThemeGroup({
         <p className="text-slate-500 text-xs">{subtitle}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {themes.map((theme) => {
-          const idx = allThemes.findIndex((t) => t.label === theme.label);
-          return (
-            <ConsensusCard
-              key={theme.label}
-              theme={theme}
-              annotation={annotations[theme.label]}
-              onClick={() => onSelectTheme(idx)}
-            />
-          );
-        })}
+        {entries.map(({ theme, idx }) => (
+          <ConsensusCard
+            key={idx}
+            theme={theme}
+            annotation={annotations[String(idx)]}
+            onClick={() => onSelectTheme(idx)}
+          />
+        ))}
       </div>
     </div>
   );
@@ -781,7 +776,7 @@ function PipelineTab({ result }: { result: EnsembleResult }) {
     return <InfoBox>Pipeline trace unavailable (older analysis format).</InfoBox>;
   }
   const rows: { label: string; value: string; hint?: string }[] = [
-    { label: "Input size", value: `${t.inputChars.toLocaleString()} chars`, hint: "raw uploaded file" },
+    { label: "Input size", value: `${t.inputChars.toLocaleString()} chars`, hint: "text extracted from upload" },
     { label: "After cleaning", value: `${t.cleanedChars.toLocaleString()} chars`, hint: "NLTK preprocessing applied" },
     { label: "Sent to LLM", value: `${t.chunkChars.toLocaleString()} chars`, hint: "truncated chunk per run" },
     { label: "Preprocessing", value: t.preprocessed ? "tokenize · lemmatize · stopwords" : "none" },
@@ -791,6 +786,13 @@ function PipelineTab({ result }: { result: EnsembleResult }) {
     { label: "Temperature", value: t.temperature.toFixed(1), hint: "LLM sampling randomness" },
     { label: "Seeds", value: t.seeds.join(", "), hint: `${t.seeds.length} independent runs` },
   ];
+  if (t.failedRunCount && t.failedRunCount > 0) {
+    rows.push({
+      label: "Excluded runs",
+      value: `${t.failedRunCount} of ${t.seeds.length}`,
+      hint: "failed request/parse — not scored by reliability",
+    });
+  }
   return (
     <div className="space-y-5">
       <div>

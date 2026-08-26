@@ -1,11 +1,9 @@
-import os
 import io
 import re
-import math
 import string
 from typing import List, Dict, Any
+import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
@@ -47,13 +45,12 @@ except Exception:
 
 app = FastAPI(title="NLP Service for Thematic Analyzer")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 300
+MAX_DOCX_PARAGRAPHS = 5000
+MAX_RELIABILITY_RUNS = 24
+MAX_THEMES_PER_RUN = 100
+MAX_FLAT_THEMES = 800
 
 STOP_WORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
@@ -71,7 +68,7 @@ NEGATIVE_WORDS = {
 }
 
 
-def compute_sentiment(text: str, processed_words: PyList[str]) -> Dict[str, float]:
+def compute_sentiment(text: str, processed_words: List[str]) -> Dict[str, float]:
     """VADER sentiment (validated lexicon); lexical fallback if unavailable."""
     if VADER_OK and SIA is not None:
         scores = SIA.polarity_scores(text)
@@ -117,17 +114,27 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         return file_content.decode("utf-8", errors="ignore")
     elif ext == "csv":
         return file_content.decode("utf-8", errors="ignore")
-    elif ext == "pdf" and PDF_SUPPORT:
+    elif ext == "pdf":
+        if not PDF_SUPPORT:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+        if not file_content.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="Invalid PDF file (bad magic bytes)")
         text = ""
         with pdfplumber.open(io.BytesIO(file_content)) as pdf:
-            for page in pdf.pages:
+            for page in pdf.pages[:MAX_PDF_PAGES]:
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
         return text
-    elif ext == "docx" and DOCX_SUPPORT:
+    elif ext == "docx":
+        if not DOCX_SUPPORT:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+        if not file_content.startswith(b"PK\x03\x04"):
+            raise HTTPException(status_code=400, detail="Invalid DOCX file (bad magic bytes)")
         doc = Document(io.BytesIO(file_content))
-        return "\n".join([para.text for para in doc.paragraphs])
+        return "\n".join(
+            [para.text for para in doc.paragraphs[:MAX_DOCX_PARAGRAPHS]]
+        )
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
@@ -216,19 +223,24 @@ def process_corpus(text: str) -> Dict[str, Any]:
 async def process_file(file: UploadFile = File(...)):
     try:
         contents = await file.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File exceeds the 10 MB size limit")
         text = extract_text_from_file(contents, file.filename)
 
         if not text or len(text.strip()) == 0:
             raise HTTPException(status_code=400, detail="File is empty or could not be read")
 
         result = process_corpus(text)
+        # Punctuation-preserving extraction for sentence-level evidence
+        # retrieval downstream (clean_text strips punctuation, which collapses
+        # sent_tokenize into one giant span).
+        result["extracted_text"] = text[:200_000]
         return result
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal error processing file")
 
 
 @app.post("/reliability")
@@ -243,12 +255,24 @@ async def reliability_endpoint(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
     runs = body.get("runs", [])
     if not isinstance(runs, list):
         raise HTTPException(status_code=400, detail="'runs' must be a list")
+    if len(runs) > MAX_RELIABILITY_RUNS:
+        raise HTTPException(status_code=400, detail=f"Too many runs (max {MAX_RELIABILITY_RUNS})")
+    for run in runs:
+        if not isinstance(run, dict):
+            raise HTTPException(status_code=400, detail="Each run must be an object")
+        themes = run.get("themes", [])
+        if not isinstance(themes, list):
+            raise HTTPException(status_code=400, detail="'themes' must be a list")
+        if len(themes) > MAX_THEMES_PER_RUN:
+            raise HTTPException(status_code=400, detail=f"Too many themes in one run (max {MAX_THEMES_PER_RUN})")
     cosine_threshold = float(body.get("cosine_threshold", 0.70))
     min_occurrence_ratio = float(body.get("min_occurrence_ratio", 0.5))
-    return compute_reliability(runs, cosine_threshold, min_occurrence_ratio)
+    return compute_reliability(runs, cosine_threshold, min_occurrence_ratio, max_flat_themes=MAX_FLAT_THEMES)
 
 
 @app.post("/embed")

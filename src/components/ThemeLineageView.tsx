@@ -23,7 +23,7 @@ interface ThemeLineageViewProps {
   themeIndex: number;
   runSeeds: number[];
   annotation?: ThemeAnnotation;
-  onAnnotate: (label: string, annotation: ThemeAnnotation) => void;
+  onAnnotate: (annotation: ThemeAnnotation) => void;
   onBack: () => void;
 }
 
@@ -41,7 +41,7 @@ export function ThemeLineageView({
   const [note, setNote] = useState(annotation?.note ?? "");
 
   const save = () => {
-    onAnnotate(theme.label, {
+    onAnnotate({
       status: annoStatus,
       note: note.trim(),
       updatedAt: new Date().toISOString(),

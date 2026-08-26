@@ -6,10 +6,15 @@ LLM-Thematic-Analysis-Tool methodology.
 
 Design notes
 ------------
-* Embeddings default to a lightweight TF-IDF vectorizer (scikit-learn, already a
-  dependency) so the service works out of the box. If ``sentence-transformers``
-  is installed, it is used automatically for true semantic (paraphrase-aware)
-  matching with the all-MiniLM-L6-v2 model used in the reference paper.
+* Embeddings default to a stateless hashed-lexical vectorizer (scikit-learn,
+  already a dependency) so the service works out of the box. If
+  ``sentence-transformers`` is installed, it is used automatically for true
+  semantic (paraphrase-aware) matching with the all-MiniLM-L6-v2 model used in
+  the reference paper.
+* Theme equivalence classes are connected components over pairwise cosine
+  (single-linkage): A-B and B-C above threshold merge even if A-C is below it.
+  This is deliberately permissive for paraphrase detection but can chain
+  semantically distinct themes; interpret cluster cohesion via lineage.
 * The whole pipeline (embed -> cluster -> consensus -> kappa -> cosine) runs in
   one call so embeddings are computed only once.
 """
@@ -19,7 +24,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.metrics import cohen_kappa_score
 
 # ---------------------------------------------------------------------------
@@ -29,6 +34,10 @@ from sklearn.metrics import cohen_kappa_score
 _EMBED_MODEL = None
 _EMBED_BACKEND: Optional[str] = None
 _ST_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# Stateless lexical fallback: hashing is batch-independent, so the cosine
+# between two themes does not change with the rest of the request payload
+# (a per-batch TfidfVectorizer.fit_transform made it do so).
+_FALLBACK_VECTORIZER = HashingVectorizer(n_features=2 ** 16, alternate_sign=False)
 
 
 def get_embedding_backend() -> str:
@@ -63,8 +72,9 @@ def embed_texts(texts: List[str]) -> Tuple[np.ndarray, str]:
         )
         return vecs, backend
 
-    # TF-IDF fallback: lexical overlap, always available.
-    vecs = TfidfVectorizer().fit_transform(texts).toarray().astype(float)
+    # Lexical fallback: hashed term counts, always available and identical
+    # regardless of which other texts share the request.
+    vecs = _FALLBACK_VECTORIZER.transform(texts).toarray().astype(float)
     norms = np.linalg.norm(vecs, axis=1, keepdims=True)
     norms[norms == 0.0] = 1.0
     return vecs / norms, backend
@@ -119,18 +129,31 @@ def compute_reliability(
     runs: List[Dict[str, Any]],
     cosine_threshold: float = 0.70,
     min_occurrence_ratio: float = 0.5,
+    max_flat_themes: int = 800,
 ) -> Dict[str, Any]:
     """Compute consensus themes + dual reliability metrics across runs.
 
     ``runs`` is a list of ``{"themes": [{"name", "description", "keywords"}]}``.
+    ``max_flat_themes`` caps the O(n^2) pairwise comparison workload.
     """
     n_runs = len(runs)
 
     # Flatten every theme from every run, remembering its origin.
     flat: List[Dict[str, Any]] = []
+    truncated = False
     for run_index, run in enumerate(runs):
+        if not isinstance(run, dict):
+            continue
+        if len(flat) >= max_flat_themes:
+            truncated = True
+            break
         seed = run.get("seed")
         for theme in run.get("themes", []) or []:
+            if not isinstance(theme, dict):
+                continue
+            if len(flat) >= max_flat_themes:
+                truncated = True
+                break
             name = str(theme.get("name", "")).strip()
             description = str(theme.get("description", "")).strip()
             keywords = theme.get("keywords", []) or []
@@ -160,6 +183,8 @@ def compute_reliability(
             "consensus": {"themes": [], "totalRuns": n_runs},
             "kappa": None,
             "cosine": None,
+            "saturation": [],
+            "truncated": truncated,
         }
 
     texts = [f["text"] for f in flat]
@@ -236,7 +261,11 @@ def compute_reliability(
                 "occurrence": occurrence,
                 "runCount": n_runs,
                 "consistency": round(consistency, 4),
-                "tier": "high" if consistency >= 0.83 else "moderate",
+                "tier": (
+                    "high"
+                    if n_runs >= 3 and consistency >= 0.83
+                    else "moderate"
+                ),
                 "memberCount": len(members),
                 "runsPresent": runs_present,
                 "lineage": member_lineage,
@@ -338,4 +367,5 @@ def compute_reliability(
         "kappa": kappa_result,
         "cosine": cosine_result,
         "saturation": saturation_curve,
+        "truncated": truncated,
     }

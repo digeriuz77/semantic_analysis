@@ -96,3 +96,13 @@ export async function runThematicEnsemble({
 export function getTextChunkLength(text: string): number {
   return Math.min(text.length, MAX_TEXT_CHARS);
 }
+
+/**
+ * Drop runs whose LLM request or JSON parse failed. A failed run carries no
+ * themes, and feeding it into the reliability engine would count it as a
+ * rater: it deflates min-occurrence consensus thresholds and drags run-centroid
+ * cosine toward 0. Runs without provenance (demo mode, legacy payloads) pass.
+ */
+export function filterSuccessfulRuns(runs: ThemeRun[]): ThemeRun[] {
+  return runs.filter((r) => !r.provenance || r.provenance.status === "ok");
+}
