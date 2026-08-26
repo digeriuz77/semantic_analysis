@@ -496,3 +496,98 @@ export function computeFacets(filter: StatementFilter = {}): StatementFacets {
 // Expose for tests
 export const _internal = { STANCE_VALUES, rowToStatement, rowToDocument };
 export type { DbClient };
+
+// ---------------------------------------------------------------------------
+// Phase 6: Embedding storage + semantic search
+// ---------------------------------------------------------------------------
+
+export interface StoredEmbedding {
+  id: number;
+  entityType: "statement" | "document";
+  entityId: number;
+  provider: string;
+  model: string;
+  dim: number;
+  vector: number[];
+  createdAt: string;
+}
+
+function rowToEmbedding(r: Row): StoredEmbedding {
+  return {
+    id: Number(r.id),
+    entityType: String(r.entityType) as "statement" | "document",
+    entityId: Number(r.entityId),
+    provider: String(r.provider),
+    model: String(r.model),
+    dim: Number(r.dim),
+    vector: parseJSON(r.vector, [] as number[]),
+    createdAt: String(r.createdAt),
+  };
+}
+
+/** Store (or replace) an embedding for an entity. */
+export function storeEmbedding(
+  entityType: "statement" | "document",
+  entityId: number,
+  provider: string,
+  model: string,
+  dim: number,
+  vector: number[]
+): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO embeddings (entityType, entityId, provider, model, dim, vector, createdAt)
+     VALUES (?,?,?,?,?,?,?)
+     ON CONFLICT(entityType, entityId, model) DO UPDATE SET
+       provider=excluded.provider, dim=excluded.dim, vector=excluded.vector, createdAt=excluded.createdAt`
+  ).run(entityType, entityId, provider, model, dim, JSON.stringify(vector), now());
+}
+
+/** Get the embedding for a single entity (first available). */
+export function getEmbedding(
+  entityType: "statement" | "document",
+  entityId: number
+): StoredEmbedding | undefined {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT * FROM embeddings WHERE entityType = ? AND entityId = ? ORDER BY id LIMIT 1")
+    .get(entityType, entityId);
+  return row ? rowToEmbedding(row) : undefined;
+}
+
+/** Get all statement embeddings, optionally filtered by model. */
+export function getAllStatementEmbeddings(model?: string): StoredEmbedding[] {
+  const db = getDb();
+  const rows = model
+    ? db.prepare("SELECT * FROM embeddings WHERE entityType = 'statement' AND model = ?").all(model)
+    : db.prepare("SELECT * FROM embeddings WHERE entityType = 'statement'").all();
+  return rows.map(rowToEmbedding);
+}
+
+export interface SemanticSearchHit {
+  statement: Statement;
+  score: number;
+}
+
+/** Cosine-rank statements against a query vector (subject to filters). */
+export function semanticSearch(
+  queryVec: number[],
+  filter: StatementFilter = {},
+  topK = 20
+): SemanticSearchHit[] {
+  const allStmts = listStatements(filter);
+  const stmtMap = new Map(allStmts.map((s) => [s.id, s]));
+  const embeddings = getAllStatementEmbeddings();
+
+  const hits: SemanticSearchHit[] = [];
+  for (const emb of embeddings) {
+    const stmt = stmtMap.get(emb.entityId);
+    if (!stmt) continue;
+    if (emb.vector.length !== queryVec.length) continue;
+    let dot = 0;
+    for (let i = 0; i < queryVec.length; i++) dot += queryVec[i] * emb.vector[i];
+    if (dot > 0.05) hits.push({ statement: stmt, score: Math.round(dot * 1000) / 1000 });
+  }
+  hits.sort((a, b) => b.score - a.score);
+  return hits.slice(0, topK);
+}

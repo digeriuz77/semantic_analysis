@@ -79,3 +79,17 @@ CREATE INDEX IF NOT EXISTS idx_stmt_date   ON statements(stmtDate);
 CREATE INDEX IF NOT EXISTS idx_stmt_doc    ON statements(documentId);
 CREATE INDEX IF NOT EXISTS idx_doc_date    ON documents(docDate);
 CREATE INDEX IF NOT EXISTS idx_actors_type ON actors(type);
+
+-- Phase 6: Embedding store. Vectors stored as JSON arrays (cosine computed in JS).
+CREATE TABLE IF NOT EXISTS embeddings (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  entityType  TEXT NOT NULL,          -- 'statement' | 'document'
+  entityId    INTEGER NOT NULL,
+  provider    TEXT NOT NULL,          -- 'google'
+  model       TEXT NOT NULL,          -- 'text-embedding-004'
+  dim         INTEGER NOT NULL,
+  vector      TEXT NOT NULL,          -- JSON array of floats
+  createdAt   TEXT NOT NULL,
+  UNIQUE(entityType, entityId, model)
+);
+CREATE INDEX IF NOT EXISTS idx_embed_entity ON embeddings(entityType, entityId);
