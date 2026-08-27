@@ -1,8 +1,9 @@
 # WP-1: Tabular (CSV) Data Support — Work Package
 
-> **Status:** APPROVED FOR IMPLEMENTATION · **Created:** 2026-08-27 · **Owner:** —
-> **Priority:** P1 · **Effort estimate:** 3.5–4.5 engineering days
-> **Depends on:** nothing (post-dates remediation passes `f7329ae`…`0127d60`)
+> **Status:** COMPLETE (implemented 2026-08-27) · **Created:** 2026-08-27 · **Owner:** —
+> **Priority:** P1 · **Effort actual:** ~1 day (vs 3.5–4.5 d estimate; fixtures generated, not hand-written)
+> **Verification:** 63 new automated checks (47 `test_tabular.py`, 8 segment cases in
+> `test_ensemble.ts`, 8 live-service e2e in `test_csv_e2e.ts`) + all prior suites green.
 
 ---
 

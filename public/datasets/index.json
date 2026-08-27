@@ -25,6 +25,14 @@
       "title": "Teaching Reflection (Intro CS Lecture)",
       "summary": "An instructor's reflection on a failed explanation of loops, surfacing assumptions about curriculum order.",
       "suggestedMethodology": "specialist_reflection"
+    },
+    {
+      "id": "survey-csv",
+      "path": "/datasets/csv-fixtures/survey-comma.csv",
+      "type": "open_ended_survey",
+      "title": "Product Survey (CSV, tabular mode)",
+      "summary": "A 60-row survey export with IDs, Likert scores, dates, and a free-text feedback column — exercises the column picker and row-cited evidence.",
+      "suggestedMethodology": "content_analysis"
     }
   ]
 }

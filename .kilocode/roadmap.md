@@ -155,12 +155,11 @@ Each phase is independently shippable. Phases are ordered by **impact ÷ effort*
 - Apply the add-database recipe: saved projects, run history, shareable report links.
 
 ### Work packages (post-phase execution units)
-- **WP-1 — Tabular (CSV) data support** *(P1, 3.5–4.5 d)*: structured CSV parsing,
-  free-text column detection + researcher override, row-index evidence provenance,
-  honest per-row statistics, row-aware chunking. Full spec:
-  [`.kilocode/work-packages/wp-1-csv-analysis.md`](work-packages/wp-1-csv-analysis.md).
-  Motivation: the pipeline currently treats `.csv` as prose (raw decode + punctuation
-  stripping), silently corrupting analysis, statistics, and the audit trail.
+- **WP-1 — Tabular (CSV) data support** *(COMPLETE 2026-08-27)*: structured CSV parsing,
+  free-text column detection + researcher override (`CsvColumnPicker` + `/inspect`),
+  row-index evidence provenance (units mode in `/evidence`), per-row VADER with prose
+  stats suppressed, whole-row `chunkSegments` packing. 63 new checks green incl.
+  live-service e2e. Spec: [`.kilocode/work-packages/wp-1-csv-analysis.md`](work-packages/wp-1-csv-analysis.md).
 
 ---
 

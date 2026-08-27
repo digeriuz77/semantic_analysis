@@ -11,6 +11,12 @@ export const MAX_CHUNKS = 4;
 export interface EnsembleOptions {
   text: string;
   config: RunConfig;
+  /**
+   * Pre-split analysis units (tabular mode: one per source row). When present,
+   * chunks are packed from whole units — a response is never split mid-row —
+   * instead of word-boundary splitting the joined text.
+   */
+  segments?: string[];
 }
 
 /** Result of chunking a long document for per-run analysis. */
@@ -103,6 +109,82 @@ export function chunkText(
   }
 }
 
+/**
+ * Pack whole analysis units (e.g. one CSV response per unit) into chunks.
+ * A unit is never split across chunks (row integrity for the LLM); a single
+ * unit longer than the chunk limit is hard-split as a last resort. Units are
+ * separated by a blank line so per-response boundaries reach the model.
+ */
+export function chunkSegments(
+  units: string[],
+  maxChunkChars = MAX_TEXT_CHARS,
+  maxChunks = MAX_CHUNKS
+): ChunkPlan {
+  const cleaned = units.map((u) => u.trim()).filter((u) => u.length > 0);
+  if (cleaned.length === 0) {
+    return { chunks: [], truncated: false, analyzedChars: 0 };
+  }
+
+  const chunks: string[] = [];
+  let current = "";
+  let consumedAll = true;
+  const SEP = "\n\n";
+
+  for (const unit of cleaned) {
+    if (unit.length > maxChunkChars) {
+      // Pathological unit: hard-split it across chunk-sized pieces.
+      let rest = unit;
+      while (rest.length > 0) {
+        const room = maxChunkChars - current.length - (current ? SEP.length : 0);
+        if (room <= 0 && current) {
+          if (chunks.length === maxChunks) {
+            consumedAll = false;
+            return finalize();
+          }
+          chunks.push(current);
+          current = "";
+          continue;
+        }
+        const take = Math.min(rest.length, Math.max(room, 0));
+        current = current ? current + SEP + rest.slice(0, take) : rest.slice(0, take);
+        rest = rest.slice(take);
+        if (current.length >= maxChunkChars) {
+          if (chunks.length === maxChunks) {
+            consumedAll = false;
+            return finalize();
+          }
+          chunks.push(current);
+          current = "";
+        }
+      }
+      continue;
+    }
+
+    const candidate = current ? current + SEP + unit : unit;
+    if (candidate.length > maxChunkChars) {
+      if (chunks.length === maxChunks) {
+        consumedAll = false;
+        break;
+      }
+      chunks.push(current);
+      current = unit;
+    } else {
+      current = candidate;
+    }
+  }
+  return finalize();
+
+  function finalize(): ChunkPlan {
+    if (current && chunks.length < maxChunks) {
+      chunks.push(current);
+    } else if (current) {
+      consumedAll = false;
+    }
+    const analyzedChars = chunks.reduce((s, c) => s + c.length, 0);
+    return { chunks, truncated: !consumedAll, analyzedChars };
+  }
+}
+
 /** Merge themes from multiple chunks of one run, deduping by normalized name. */
 function mergeThemes(themeLists: Theme[][]): Theme[] {
   const merged: Theme[] = [];
@@ -140,12 +222,13 @@ function mergeThemes(themeLists: Theme[][]): Theme[] {
 export async function runThematicEnsemble({
   text,
   config,
+  segments,
 }: EnsembleOptions): Promise<ThemeRun[]> {
   const adapter = getChatAdapter(config.provider);
   const template = config.promptTemplate?.trim()
     ? config.promptTemplate
     : DEFAULT_THEMATIC_PROMPT;
-  const plan = chunkText(text);
+  const plan = segments && segments.length > 0 ? chunkSegments(segments) : chunkText(text);
   const cap = config.maxThemesPerRun;
 
   const settled = await Promise.allSettled(
@@ -197,12 +280,13 @@ export interface AdaptiveEnsembleResult {
 export async function runAdaptiveEnsemble({
   text,
   config,
+  segments,
 }: EnsembleOptions): Promise<AdaptiveEnsembleResult> {
   const adapter = getChatAdapter(config.provider);
   const template = config.promptTemplate?.trim()
     ? config.promptTemplate
     : DEFAULT_THEMATIC_PROMPT;
-  const plan = chunkText(text);
+  const plan = segments && segments.length > 0 ? chunkSegments(segments) : chunkText(text);
   const cap = config.maxThemesPerRun;
 
   const runs: ThemeRun[] = [];

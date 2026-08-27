@@ -13,6 +13,8 @@ export interface AnalysisResult {
     positive: number;
     neutral: number;
     negative: number;
+    /** How sentiment was computed (e.g. "per-row-mean" for tabular input). */
+    basis?: string;
   };
   cleanedText: string;
 }
@@ -194,6 +196,10 @@ export interface EvidenceSpan {
   text: string;
   cosine: number;
   unitIndex: number;
+  /** Excel-style record number (header = row 1) — tabular mode only. */
+  rowIndex?: number;
+  /** Source column name — tabular mode only. */
+  columnName?: string;
 }
 
 export interface ConsensusResult {
@@ -229,6 +235,13 @@ export interface PipelineTrace {
   failedRunCount?: number;
   /** Runs actually scored by the reliability engine. */
   reliabilityRunCount?: number;
+  /** Tabular-source metadata (CSV uploads only). */
+  csv?: {
+    delimiter: string;
+    encoding: string;
+    rowCount: number;
+    textColumnNames: string[];
+  };
 }
 
 /** One point on the theoretical-saturation curve. */

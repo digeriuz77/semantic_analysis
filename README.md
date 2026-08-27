@@ -43,6 +43,25 @@ frameworks, COREQ) drawn from qualitative-research best practice.
   the dashboard stays fully explorable.
 - **NLP preprocessing** — NLTK tokenization/lemmatization, VADER sentiment,
   readability, word frequency; supports `.txt`, `.pdf`, `.docx`, `.csv`.
+- **Tabular (CSV) mode** — survey exports are parsed structurally (delimiter
+  sniffing, encoding ladder, ragged-row rejection). A column picker shows the
+  detected types (numeric / datetime / text / categorical) and you confirm
+  which columns hold free-text responses; each response row becomes one
+  analysis unit, evidence cites `row N · column`, sentiment is a per-response
+  mean, and prose-only stats (Flesch, lexical density) are suppressed rather
+  than misreported.
+
+## Supported inputs
+
+| Capability | `.txt` / `.pdf` / `.docx` (prose) | `.csv` (tabular) |
+|---|---|---|
+| Analysis unit | sentence | response row (selected text columns) |
+| Evidence provenance | retrieved sentence + cosine | `row N · column` + cosine |
+| Sentiment | whole-document VADER | mean of per-response VADER |
+| Flesch / lexical density | reported | suppressed (undefined over rows) |
+| Chunking | word-boundary, ≤4 × 8k chars | whole-row packing, ≤4 × 8k chars |
+| Column selection | n/a | auto-detected + researcher override |
+| Limits | 10 MB; PDF ≤300 pages | 10 MB; ≤5,000 rows; ≤1,000 chars/cell |
 
 ## Tech Stack
 

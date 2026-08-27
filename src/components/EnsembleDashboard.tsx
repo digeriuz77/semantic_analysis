@@ -123,12 +123,44 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Words" value={result.stats.totalWords.toLocaleString()} icon={FileText} color="text-blue-400" />
-        <StatCard title="Unique Vocabulary" value={result.stats.uniqueWords.toLocaleString()} icon={Activity} color="text-teal-400" />
-        <StatCard title="Sentences" value={result.stats.sentences.toLocaleString()} icon={TrendingUp} color="text-purple-400" />
-        <StatCard title="Runs" value={`${result.runs.length}`} icon={Layers} color="text-gold-400" />
-      </div>
+      {(() => {
+        const tabular = Boolean(result.pipelineTrace?.csv);
+        const csvMeta = result.pipelineTrace?.csv;
+        return (
+          <>
+            {tabular && csvMeta && (
+              <div className="flex items-start gap-3 bg-blue-900/20 border border-blue-700/40 rounded-xl p-4">
+                <Layers size={18} className="text-blue-400 mt-0.5" />
+                <p className="text-blue-200 text-sm">
+                  <span className="font-semibold">Tabular source.</span>{" "}
+                  {csvMeta.rowCount.toLocaleString()} rows · delimiter{" "}
+                  <code className="text-blue-300">
+                    {csvMeta.delimiter === "\t" ? "\\t" : csvMeta.delimiter}
+                  </code>{" "}
+                  · analyzed column
+                  {csvMeta.textColumnNames.length === 1 ? "" : "s"}:{" "}
+                  <span className="text-blue-100 font-medium">
+                    {csvMeta.textColumnNames.join(", ")}
+                  </span>
+                  . Each response row is one analysis unit; evidence cites row
+                  numbers (header = row 1).
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard title="Total Words" value={result.stats.totalWords.toLocaleString()} icon={FileText} color="text-blue-400" />
+              <StatCard title="Unique Vocabulary" value={result.stats.uniqueWords.toLocaleString()} icon={Activity} color="text-teal-400" />
+              <StatCard
+                title={tabular ? "Responses" : "Sentences"}
+                value={result.stats.sentences.toLocaleString()}
+                icon={TrendingUp}
+                color="text-purple-400"
+              />
+              <StatCard title="Runs" value={`${result.runs.length}`} icon={Layers} color="text-gold-400" />
+            </div>
+          </>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
@@ -739,7 +771,11 @@ function OverviewTab({ result }: { result: EnsembleResult }) {
         </div>
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4">Sentiment (VADER)</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">
+          {result.sentiment.basis === "per-row-mean"
+            ? "Sentiment (VADER, per-response mean)"
+            : "Sentiment (VADER)"}
+        </h3>
         <div className="flex items-center justify-center h-64 gap-8">
           <SentimentRing label="Positive" value={result.sentiment.positive} color="#0d9488" />
           <SentimentRing label="Neutral" value={result.sentiment.neutral} color="#3b82f6" />
@@ -861,6 +897,13 @@ function PipelineTab({ result }: { result: EnsembleResult }) {
     { label: "Temperature", value: t.temperature.toFixed(1), hint: "LLM sampling randomness" },
     { label: "Seeds", value: t.seeds.join(", "), hint: `${t.seeds.length} independent runs` },
   ];
+  if (t.csv) {
+    rows.splice(1, 0, {
+      label: "Source",
+      value: `tabular · ${t.csv.rowCount.toLocaleString()} rows`,
+      hint: `delimiter "${t.csv.delimiter === "\t" ? "\\t" : t.csv.delimiter}" · ${t.csv.encoding} · column(s): ${t.csv.textColumnNames.join(", ") || "auto-detected"}`,
+    });
+  }
   if (t.inputTruncated) {
     rows.push({
       label: "Input truncated",

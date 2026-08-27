@@ -10,6 +10,7 @@ import { ModelCompareView } from "@/components/ModelCompareView";
 import { ResearchDesignStep } from "@/components/ResearchDesignStep";
 import { CoreqChecklistView } from "@/components/CoreqChecklistView";
 import { DatasetGallery } from "@/components/DatasetGallery";
+import { CsvColumnPicker } from "@/components/CsvColumnPicker";
 import type {
   EnsembleResult,
   FrameworkId,
@@ -21,16 +22,27 @@ import type {
 } from "@/types";
 import { Upload, BarChart3, Microscope, GitCompare, AlertCircle, Compass, ClipboardCheck } from "lucide-react";
 
-type View = "upload" | "design" | "configure" | "results" | "specialist" | "compare" | "coreq";
+type View =
+  | "upload"
+  | "design"
+  | "columns"
+  | "configure"
+  | "results"
+  | "specialist"
+  | "compare"
+  | "coreq";
 
 /** Files analyzed concurrently; low to be polite to provider rate limits. */
 const FILE_CONCURRENCY = 2;
+
+const isCsv = (f: File) => f.name.toLowerCase().endsWith(".csv");
 
 export default function AnalyzerPage() {
   const [view, setView] = useState<View>("upload");
   const [files, setFiles] = useState<File[]>([]);
   const [config, setConfig] = useState<RunConfig>(defaultConfig());
   const [design, setDesign] = useState<ResearchDesign | null>(null);
+  const [csvColumns, setCsvColumns] = useState<Record<string, number[]>>({});
   const [results, setResults] = useState<EnsembleResult[]>([]);
   const [specialistResult, setSpecialistResult] = useState<SpecialistResult | null>(null);
   const [compareResult, setCompareResult] = useState<ModelComparisonResult | null>(null);
@@ -76,7 +88,12 @@ export default function AnalyzerPage() {
         promptTemplate: FRAMEWORKS[d.framework].promptTemplate,
       }));
     });
-    setView("configure");
+    // CSV files get a column-picking step; prose goes straight to configuration.
+    setView(files.some(isCsv) ? "columns" : "configure");
+  };
+
+  const handleCsvColumnsChange = (fileName: string, indices: number[]) => {
+    setCsvColumns((prev) => ({ ...prev, [fileName]: indices }));
   };
 
   const handleRun = async (runConfig: RunConfig) => {
@@ -107,6 +124,10 @@ export default function AnalyzerPage() {
       if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
       if (runConfig.framework) formData.append("framework", runConfig.framework);
       if (runConfig.adaptive) formData.append("adaptive", "true");
+      const columns = csvColumns[file.name];
+      if (isCsv(file) && columns && columns.length > 0) {
+        formData.append("text_columns", JSON.stringify(columns));
+      }
 
       const res = await fetch("/api/analyze-ensemble", {
         method: "POST",
@@ -226,6 +247,7 @@ export default function AnalyzerPage() {
     setSpecialistResult(null);
     setCompareResult(null);
     setDesign(null);
+    setCsvColumns({});
     setError(null);
     setPreselectedFramework(null);
     setView("upload");
@@ -312,6 +334,16 @@ export default function AnalyzerPage() {
           preselectedFramework={preselectedFramework}
           onComplete={handleDesignComplete}
           onBack={() => setView("upload")}
+        />
+      )}
+
+      {!isProcessing && view === "columns" && (
+        <CsvColumnPicker
+          csvFiles={files.filter(isCsv)}
+          selections={csvColumns}
+          onChange={handleCsvColumnsChange}
+          onComplete={() => setView("configure")}
+          onBack={() => setView("design")}
         />
       )}
 

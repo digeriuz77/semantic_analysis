@@ -5,11 +5,13 @@ import {
   enrichConsensusWithEvidence,
   processFileViaNlp,
   NlpUnavailableError,
+  type AnalysisUnit,
 } from "@/lib/nlp";
 import {
   runThematicEnsemble,
   runAdaptiveEnsemble,
   chunkText,
+  chunkSegments,
   filterSuccessfulRuns,
 } from "@/lib/ensemble";
 import { generateDemoRuns } from "@/lib/demo";
@@ -57,6 +59,23 @@ function parseNumber(
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
+}
+
+/** Parse the per-file text_columns override (JSON int array) or null. */
+function parseTextColumns(value: string | null): number[] | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (
+      Array.isArray(parsed) &&
+      parsed.every((i) => typeof i === "number" && Number.isInteger(i) && i >= 0)
+    ) {
+      return (parsed as number[]).slice(0, 50);
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
 }
 
 /**
@@ -124,6 +143,7 @@ export async function POST(request: NextRequest) {
     const paradigm = (formData.get("paradigm") as ParadigmId | null) || undefined;
     const framework = (formData.get("framework") as FrameworkId | null) || undefined;
     const adaptive = formData.get("adaptive") === "true";
+    const textColumns = parseTextColumns(formData.get("text_columns") as string | null);
 
     const config: RunConfig = {
       seeds,
@@ -139,11 +159,16 @@ export async function POST(request: NextRequest) {
     };
 
     // 1. NLP preprocessing (server-side; file never reaches the browser raw).
-    const nlp = await processFileViaNlp(file);
+    // Tabular files are parsed into row-indexed units; prose files are cleaned.
+    const nlp = await processFileViaNlp(file, textColumns ?? undefined);
+    const isTabular = nlp.mode === "tabular";
+    const units: AnalysisUnit[] = isTabular ? (nlp.units ?? []) : [];
+    const segments = units.map((u) => u.text);
     const sentiment = nlp.sentiment ?? { positive: 33, neutral: 34, negative: 33 };
     const cleanedText = nlp.cleaned_text.slice(0, MAX_CLIENT_TEXT_CHARS);
     // Punctuation-preserving text: sent_tokenize in /evidence needs sentence
-    // boundaries that clean_text (which strips punctuation) destroys.
+    // boundaries that clean_text (which strips punctuation) destroys. In
+    // tabular mode the units themselves are the evidence corpus.
     const evidenceText = (nlp.extracted_text ?? nlp.cleaned_text).slice(
       0,
       MAX_EVIDENCE_TEXT_CHARS
@@ -151,7 +176,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Ensemble runs (each carries full provenance). Adaptive mode runs
     // seeds sequentially and stops early on a discovery plateau; otherwise
-    // seeds run in parallel.
+    // seeds run in parallel. Tabular input uses whole-row chunk packing.
     let demo = false;
     let stoppedEarly = false;
     let runs;
@@ -160,11 +185,12 @@ export async function POST(request: NextRequest) {
         const adaptiveResult = await runAdaptiveEnsemble({
           text: nlp.cleaned_text,
           config,
+          segments,
         });
         runs = adaptiveResult.runs;
         stoppedEarly = adaptiveResult.stoppedEarly;
       } else {
-        runs = await runThematicEnsemble({ text: nlp.cleaned_text, config });
+        runs = await runThematicEnsemble({ text: nlp.cleaned_text, config, segments });
       }
     } else {
       demo = true;
@@ -181,11 +207,19 @@ export async function POST(request: NextRequest) {
       minOccurrenceRatio,
     });
 
-    // 4. Evidence grounding: retrieve supporting source spans per consensus theme.
-    await enrichConsensusWithEvidence(evidenceText, reliability.consensus.themes);
+    // 4. Evidence grounding: retrieve supporting source spans per consensus
+    // theme (units mode cites row + column for tabular input).
+    await enrichConsensusWithEvidence(
+      evidenceText,
+      reliability.consensus.themes,
+      isTabular ? units : undefined
+    );
 
     // 5. Pipeline trace for transparency/auditability.
-    const chunkPlan = chunkText(nlp.cleaned_text);
+    const chunkPlan =
+      segments.length > 0
+        ? chunkSegments(segments)
+        : chunkText(nlp.cleaned_text);
     const pipelineTrace: PipelineTrace = {
       // Characters, not bytes: multi-byte corpora must not misreport size.
       inputChars: nlp.extracted_text?.length ?? nlp.cleaned_text.length,
@@ -203,6 +237,14 @@ export async function POST(request: NextRequest) {
       framework,
       failedRunCount,
       reliabilityRunCount: successfulRuns.length,
+      csv: isTabular && nlp.csv
+        ? {
+            delimiter: nlp.csv.delimiter,
+            encoding: nlp.csv.encoding,
+            rowCount: nlp.csv.rowCount,
+            textColumnNames: nlp.csv.textColumnNames ?? [],
+          }
+        : undefined,
     };
 
     const result: EnsembleResult = {
@@ -228,9 +270,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof NlpUnavailableError) {
+      // 400/413 from the service (e.g. malformed CSV, no text column) pass
+      // through as client errors; anything else is a service outage.
       return NextResponse.json(
         { error: error.message, code: error.code },
-        { status: 503 }
+        { status: error.status }
       );
     }
     console.error("Ensemble analysis error:", error);

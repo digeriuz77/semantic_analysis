@@ -1,5 +1,5 @@
 /** Smoke test for the new ensemble TS logic. Run: bun run nlp_service/test_ensemble.ts */
-import { chunkText, filterSuccessfulRuns, runAdaptiveEnsemble } from "../src/lib/ensemble";
+import { chunkText, chunkSegments, filterSuccessfulRuns, runAdaptiveEnsemble } from "../src/lib/ensemble";
 import type { ThemeRun } from "../src/types";
 
 let pass = 0;
@@ -41,6 +41,43 @@ check("single over-long word hard-split within cap",
     && pathological.chunks.join("") === "a".repeat(9000)
     && !pathological.truncated,
   `lens=${pathological.chunks.map((c) => c.length)}`);
+
+// --- chunkSegments: whole-unit packing (tabular mode) ---
+const mkUnit = (i: number, words = 40) =>
+  `Response ${i}: ` + Array.from({ length: words }, (_, k) => `w${i}_${k}`).join(" ");
+
+const seg1 = chunkSegments([mkUnit(1), mkUnit(2)], 8000, 4);
+check("two small units pack into one chunk",
+  seg1.chunks.length === 1 && !seg1.truncated
+    && seg1.chunks[0].split("\n\n").length === 2,
+  `n=${seg1.chunks.length}`);
+
+const manyUnits = Array.from({ length: 120 }, (_, i) => mkUnit(i + 1)); // ~3.3k chars each
+const seg2 = chunkSegments(manyUnits, 8000, 4);
+check("120 units -> 4 chunks (cap), truncated flagged",
+  seg2.chunks.length === 4 && seg2.truncated, `n=${seg2.chunks.length}`);
+check("every chunk within limit", seg2.chunks.every((c) => c.length <= 8000));
+check("no unit split across chunks (each line intact)",
+  seg2.chunks.every((c) =>
+    c.split("\n\n").every((unit) => unit.startsWith("Response ") || unit.startsWith("Response"))
+  ),
+  "split unit found");
+const packedUnits = seg2.chunks.flatMap((c) => c.split("\n\n")).length;
+const totalChars = manyUnits.join("\n\n").length;
+check("packed unit count disclosed implicitly (analyzedChars < total)",
+  seg2.analyzedChars < totalChars,
+  `analyzed=${seg2.analyzedChars} total=${totalChars} packed=${packedUnits}`);
+
+const overUnit = "x".repeat(9000);
+const seg3 = chunkSegments([mkUnit(1), overUnit, mkUnit(2)], 8000, 4);
+check("pathological unit hard-split, neighbors intact",
+  seg3.chunks.every((c) => c.length <= 8000)
+    && !seg3.truncated
+    && seg3.chunks.join("").includes("Response 2:"),
+  `lens=${seg3.chunks.map((c) => c.length)}`);
+
+check("empty unit list -> no chunks", chunkSegments([]).chunks.length === 0);
+check("blank units filtered", chunkSegments(["", "   ", mkUnit(9)]).chunks.length === 1);
 
 // --- filterSuccessfulRuns ---
 const mk = (status?: "ok" | "parse_failed" | "request_failed"): ThemeRun => ({
