@@ -51,6 +51,39 @@ frameworks, COREQ) drawn from qualitative-research best practice.
   mean, and prose-only stats (Flesch, lexical density) are suppressed rather
   than misreported.
 
+## Deployment
+
+Two processes: the Next.js app and the Python NLP/reliability service.
+
+```bash
+# 1. Python service (required for preprocessing + reliability + evidence)
+cd nlp_service
+pip install -r requirements.txt
+python setup_nltk.py            # first run only: downloads NLTK data
+uvicorn main:app --host 127.0.0.1 --port 8000
+# Optional (semantic embeddings): pip install sentence-transformers
+
+# 2. Next.js app
+cp .env.example .env.local      # then edit: set FIREWORKS_API_KEY=
+bun install && bun run build && bun run start
+```
+
+- **LLM provider**: Fireworks ships enabled with default model
+  `accounts/fireworks/models/glm-5p3` (editable per analysis in the
+  configurator; any Fireworks chat-completions model id works). The app sends
+  OpenAI-compatible chat-completions requests with `max_tokens: 1400` — the
+  theme JSON needs ~1k tokens, so a 131k budget only raises cost and latency;
+  `temperature` comes from the configurator, `seed` is passed for
+  reproducibility where the provider honors it.
+- **Verify before first analysis**:
+  `curl "http://localhost:3000/api/providers?ping=fireworks"` — a 1-token
+  round-trip that confirms key, model, and network, with latency.
+- **Remote NLP service**: set `NLP_SERVICE_URL` (default
+  `http://localhost:8000`) and `CORPUS_DB_PATH` for the SQLite store.
+- **Posture**: built as a single-researcher local tool. No auth layer, an
+  in-memory per-process rate limiter, and a single-writer SQLite store — put it
+  behind your own auth/reverse proxy before exposing it to multiple users.
+
 ## Supported inputs
 
 | Capability | `.txt` / `.pdf` / `.docx` (prose) | `.csv` (tabular) |
