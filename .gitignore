@@ -43,3 +43,7 @@ next-env.d.ts
 
 # local corpus database (persistent research data — user-owned, not committed)
 /data/
+
+# python bytecode
+__pycache__/
+*.pyc

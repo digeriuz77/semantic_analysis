@@ -1,0 +1,51 @@
+id,feedback
+X01,ok
+X02,Downtime was announced in advance and the maintenance window respected our timezone in the sandbox.
+X03,Downtime was announced in advance and the maintenance window respected our timezone across both tenants.
+X04,The new API version kept backward compatibility so our integration needed no changes while onboarding the agency.
+X05,
+X06,ok
+X07,I appreciated the changelog notes attached to each release during the transition period on the staging environment.
+X08,The new API version kept backward compatibility so our integration needed no changes across both tenants.
+X09,The new API version kept backward compatibility so our integration needed no changes on the staging environment.
+X10,
+X11,ok
+X12,The migration guide was clear and the rollback procedure worked exactly as documented across both tenants.
+X13,The support engineer walked me through the schema change patiently on our call on the staging environment.
+X14,The migration guide was clear and the rollback procedure worked exactly as documented in the sandbox.
+X15,
+X16,ok
+X17,The migration guide was clear and the rollback procedure worked exactly as documented while onboarding the agency.
+X18,Downtime was announced in advance and the maintenance window respected our timezone across both tenants.
+X19,The new API version kept backward compatibility so our integration needed no changes after the security review.
+X20,
+X21,ok
+X22,I appreciated the changelog notes attached to each release during the transition period while onboarding the agency.
+X23,The migration guide was clear and the rollback procedure worked exactly as documented in the sandbox.
+X24,The migration guide was clear and the rollback procedure worked exactly as documented last month.
+X25,
+X26,ok
+X27,The migration guide was clear and the rollback procedure worked exactly as documented after the audit.
+X28,I appreciated the changelog notes attached to each release during the transition period while onboarding the agency.
+X29,The migration guide was clear and the rollback procedure worked exactly as documented across both tenants.
+X30,
+X31,ok
+X32,The support engineer walked me through the schema change patiently on our call across both tenants.
+X33,The new API version kept backward compatibility so our integration needed no changes after the audit.
+X34,The new API version kept backward compatibility so our integration needed no changes after the audit.
+X35,
+X36,ok
+X37,The support engineer walked me through the schema change patiently on our call across both tenants.
+X38,The migration guide was clear and the rollback procedure worked exactly as documented after the security review.
+X39,The migration guide was clear and the rollback procedure worked exactly as documented across both tenants.
+X40,
+X41,ok
+X42,The support engineer walked me through the schema change patiently on our call before the holiday freeze.
+X43,The new API version kept backward compatibility so our integration needed no changes during the pilot.
+X44,The support engineer walked me through the schema change patiently on our call for the regional team.
+X45,
+X46,ok
+X47,I appreciated the changelog notes attached to each release during the transition period in the sandbox.
+X48,The support engineer walked me through the schema change patiently on our call last month.
+X49,The migration guide was clear and the rollback procedure worked exactly as documented while onboarding the agency.
+X50,

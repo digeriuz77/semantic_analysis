@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Stance, Statement } from "@/types/corpus";
+import type { ActorType, Stance, Statement } from "@/types/corpus";
 import { createStatement, updateStatement, type StatementDraft } from "@/lib/corpusClient";
 import { X, Save } from "lucide-react";
 
@@ -130,7 +130,7 @@ export function StatementEditor({
               </label>
               <select
                 value={actorType}
-                onChange={(e) => setActorType(e.target.value)}
+                onChange={(e) => setActorType(e.target.value as ActorType)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-teal-500 outline-none"
               >
                 <option value="person">Person</option>
@@ -192,7 +192,7 @@ export function StatementEditor({
               <input
                 type="date"
                 value={stmtDate ? stmtDate.slice(0, 10) : ""}
-                onChange={(e) => setStmtDate(e.target.value || null)}
+                onChange={(e) => setStmtDate(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-teal-500 outline-none"
               />
             </div>

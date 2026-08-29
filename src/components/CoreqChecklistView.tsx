@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CoreqResponse } from "@/types";
 import { COREQ_ITEMS, COREQ_DOMAIN_LABEL } from "@/lib/coreq";
-import { ArrowLeft, ClipboardCheck, Save, Download } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Save, Download, Database } from "lucide-react";
 
 interface CoreqChecklistViewProps {
   onBack: () => void;
 }
 
 const STORAGE_KEY = "ta:coreq-responses";
+const STUDY_KEY_STORAGE = "ta:coreq-study";
 
 function loadResponses(): Record<number, CoreqResponse> {
   if (typeof window === "undefined") return {};
@@ -29,9 +30,90 @@ function persistResponses(r: Record<number, CoreqResponse>) {
   }
 }
 
+/** Server persistence, debounced per item so typing does not POST per keystroke. */
+const pendingSaves = new Map<string, number>();
+
+function saveToServer(study: string, id: number, next: CoreqResponse) {
+  const key = `${study}::${id}`;
+  if (pendingSaves.has(key)) {
+    clearTimeout(pendingSaves.get(key));
+  }
+  const timer = setTimeout(() => {
+    pendingSaves.delete(key);
+    fetch("/api/coreq", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ study, itemId: id, checked: next.checked, detail: next.detail }),
+    }).catch(() => {
+      /* offline: localStorage cache still holds the change */
+    });
+  }, 500) as unknown as number;
+  pendingSaves.set(key, timer);
+}
+
+function loadStudy(): string {
+  if (typeof window === "undefined") return "default";
+  try {
+    return window.localStorage.getItem(STUDY_KEY_STORAGE) || "default";
+  } catch {
+    return "default";
+  }
+}
+
 export function CoreqChecklistView({ onBack }: CoreqChecklistViewProps) {
   const [responses, setResponses] = useState<Record<number, CoreqResponse>>(loadResponses);
   const [filterDomain, setFilterDomain] = useState<string>("all");
+  const [study, setStudy] = useState<string>(loadStudy);
+  const [serverSynced, setServerSynced] = useState(false);
+
+  // Load server-side responses for the active study (SQLite outlives browser
+  // data resets); merge only strictly-newer rows over the local cache.
+  // Debounced so typing a study key does not fire a request per keystroke.
+  useEffect(() => {
+    const key = study.trim() || "default";
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/coreq?study=${encodeURIComponent(key)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { responses?: Record<string, { checked: boolean; detail: string; updatedAt: string }> } | null) => {
+          if (cancelled || !data?.responses) return;
+          setServerSynced(true);
+          setResponses((prev) => {
+            const merged = { ...prev };
+            for (const [id, row] of Object.entries(data.responses!)) {
+              const itemId = Number(id);
+              if (!Number.isInteger(itemId)) continue;
+              const local = merged[itemId];
+              if (!local || new Date(row.updatedAt) > new Date(local.updatedAt)) {
+                merged[itemId] = {
+                  checked: row.checked,
+                  detail: row.detail,
+                  updatedAt: row.updatedAt,
+                };
+              }
+            }
+            persistResponses(merged);
+            return merged;
+          });
+        })
+        .catch(() => {
+          /* offline: localStorage cache stands */
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [study]);
+
+  // Cross-tab sync: another tab writing localStorage updates this one.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) setResponses(loadResponses());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const domains = ["all", ...Object.keys(COREQ_DOMAIN_LABEL)];
   const items =
@@ -42,31 +124,40 @@ export function CoreqChecklistView({ onBack }: CoreqChecklistViewProps) {
   const checkedCount = Object.values(responses).filter((r) => r.checked).length;
   const completion = Math.round((checkedCount / COREQ_ITEMS.length) * 100);
 
-  const toggle = (id: number) => {
+  const changeStudy = (value: string) => {
+    setStudy(value);
+    setServerSynced(false);
+    try {
+      window.localStorage.setItem(STUDY_KEY_STORAGE, value);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const updateItem = (id: number, next: CoreqResponse) => {
     setResponses((prev) => {
-      const existing = prev[id];
-      const next: CoreqResponse = {
-        checked: !existing?.checked,
-        detail: existing?.detail ?? "",
-        updatedAt: new Date().toISOString(),
-      };
       const updated = { ...prev, [id]: next };
       persistResponses(updated);
       return updated;
     });
+    saveToServer(study.trim() || "default", id, next);
+  };
+
+  const toggle = (id: number) => {
+    const existing = responses[id];
+    updateItem(id, {
+      checked: !existing?.checked,
+      detail: existing?.detail ?? "",
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const updateDetail = (id: number, detail: string) => {
-    setResponses((prev) => {
-      const existing = prev[id];
-      const next: CoreqResponse = {
-        checked: existing?.checked ?? false,
-        detail,
-        updatedAt: new Date().toISOString(),
-      };
-      const updated = { ...prev, [id]: next };
-      persistResponses(updated);
-      return updated;
+    const existing = responses[id];
+    updateItem(id, {
+      checked: existing?.checked ?? false,
+      detail,
+      updatedAt: new Date().toISOString(),
     });
   };
 
@@ -103,8 +194,28 @@ export function CoreqChecklistView({ onBack }: CoreqChecklistViewProps) {
         <p className="text-slate-400 text-sm mt-2 max-w-2xl">
           Consolidated criteria for reporting qualitative research (Tong,
           Sainsbury &amp; Craig, 2007). Self-check against 32 reporting items.
-          Responses persist locally and can be exported.
+          Responses persist per study in the local database (with a browser
+          cache for offline use) and can be exported.
         </p>
+
+        {/* Study key: separates checklists between projects */}
+        <div className="mt-4 flex items-center gap-2 flex-wrap">
+          <Database size={14} className="text-slate-500" />
+          <label className="text-xs text-slate-400" htmlFor="coreq-study">
+            Study
+          </label>
+          <input
+            id="coreq-study"
+            type="text"
+            value={study}
+            onChange={(e) => changeStudy(e.target.value)}
+            placeholder="default"
+            className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-300 text-xs focus:border-teal-600 outline-none w-48"
+          />
+          <span className="text-xs text-slate-600">
+            {serverSynced ? "synced with local database" : "local cache only"}
+          </span>
+        </div>
 
         {/* Progress + actions */}
         <div className="mt-5 flex items-center gap-4 flex-wrap">

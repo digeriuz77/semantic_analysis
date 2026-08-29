@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { SCHEMA_SQL } from "./schema";
 
 /**
  * Runtime-adaptive SQLite. We can't ship a native module (network install is
@@ -86,8 +86,8 @@ export function getDb(): DbClient {
   const db = openRaw(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
-  const schema = readFileSync(join(process.cwd(), "src", "db", "schema.sql"), "utf8");
-  db.exec(schema);
+  // Schema is bundled (src/db/schema.ts) so it works in any build layout.
+  db.exec(SCHEMA_SQL);
   _db = db;
   return db;
 }

@@ -154,6 +154,13 @@ Each phase is independently shippable. Phases are ordered by **impact ÷ effort*
 ### Phase 5 (optional) — Persistence & collaboration
 - Apply the add-database recipe: saved projects, run history, shareable report links.
 
+### Work packages (post-phase execution units)
+- **WP-1 — Tabular (CSV) data support** *(COMPLETE 2026-08-27)*: structured CSV parsing,
+  free-text column detection + researcher override (`CsvColumnPicker` + `/inspect`),
+  row-index evidence provenance (units mode in `/evidence`), per-row VADER with prose
+  stats suppressed, whole-row `chunkSegments` packing. 63 new checks green incl.
+  live-service e2e. Spec: [`.kilocode/work-packages/wp-1-csv-analysis.md`](work-packages/wp-1-csv-analysis.md).
+
 ---
 
 ## 5. Definition of "Done" (completion criteria)

@@ -58,10 +58,12 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
   const [activeFile, setActiveFile] = useState(0);
   const [tab, setTab] = useState<Tab>("reliability");
   const [selectedThemeIdx, setSelectedThemeIdx] = useState<number | null>(null);
-  const result = results[activeFile];
+  const result = results[Math.min(activeFile, Math.max(results.length - 1, 0))];
   const { annotations, annotate } = useAnnotations(result.id);
 
-  // Lineage drill-down view takes over the panel.
+  // Lineage drill-down view takes over the panel. Annotations are keyed by
+  // consensus-theme index (not label): duplicate labels are possible and would
+  // otherwise cross-contaminate researcher judgements.
   if (selectedThemeIdx !== null) {
     const theme = result.reliability.consensus.themes[selectedThemeIdx];
     if (theme) {
@@ -71,8 +73,8 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
             theme={theme}
             themeIndex={selectedThemeIdx}
             runSeeds={result.runs.map((r) => r.seed)}
-            annotation={annotations[theme.label]}
-            onAnnotate={annotate}
+            annotation={annotations[String(selectedThemeIdx)]}
+            onAnnotate={(a) => annotate(String(selectedThemeIdx), a)}
             onBack={() => setSelectedThemeIdx(null)}
           />
         </div>
@@ -121,12 +123,44 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Words" value={result.stats.totalWords.toLocaleString()} icon={FileText} color="text-blue-400" />
-        <StatCard title="Unique Vocabulary" value={result.stats.uniqueWords.toLocaleString()} icon={Activity} color="text-teal-400" />
-        <StatCard title="Sentences" value={result.stats.sentences.toLocaleString()} icon={TrendingUp} color="text-purple-400" />
-        <StatCard title="Runs" value={`${result.runs.length}`} icon={Layers} color="text-gold-400" />
-      </div>
+      {(() => {
+        const tabular = Boolean(result.pipelineTrace?.csv);
+        const csvMeta = result.pipelineTrace?.csv;
+        return (
+          <>
+            {tabular && csvMeta && (
+              <div className="flex items-start gap-3 bg-blue-900/20 border border-blue-700/40 rounded-xl p-4">
+                <Layers size={18} className="text-blue-400 mt-0.5" />
+                <p className="text-blue-200 text-sm">
+                  <span className="font-semibold">Tabular source.</span>{" "}
+                  {csvMeta.rowCount.toLocaleString()} rows · delimiter{" "}
+                  <code className="text-blue-300">
+                    {csvMeta.delimiter === "\t" ? "\\t" : csvMeta.delimiter}
+                  </code>{" "}
+                  · analyzed column
+                  {csvMeta.textColumnNames.length === 1 ? "" : "s"}:{" "}
+                  <span className="text-blue-100 font-medium">
+                    {csvMeta.textColumnNames.join(", ")}
+                  </span>
+                  . Each response row is one analysis unit; evidence cites row
+                  numbers (header = row 1).
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard title="Total Words" value={result.stats.totalWords.toLocaleString()} icon={FileText} color="text-blue-400" />
+              <StatCard title="Unique Vocabulary" value={result.stats.uniqueWords.toLocaleString()} icon={Activity} color="text-teal-400" />
+              <StatCard
+                title={tabular ? "Responses" : "Sentences"}
+                value={result.stats.sentences.toLocaleString()}
+                icon={TrendingUp}
+                color="text-purple-400"
+              />
+              <StatCard title="Runs" value={`${result.runs.length}`} icon={Layers} color="text-gold-400" />
+            </div>
+          </>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
@@ -167,8 +201,8 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
           <p className="text-teal-200 text-sm">
             <span className="font-semibold">Adaptive stop.</span> The ensemble
             stopped early after {result.runs.length} run{result.runs.length === 1 ? "" : "s"} —
-            two consecutive runs added no new theme names, indicating a
-            theoretical-saturation plateau.
+            two consecutive successful runs added no new theme names,
+            indicating a discovery plateau.
           </p>
         </div>
       )}
@@ -181,10 +215,11 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
 // ---------------------------------------------------------------------------
 
 function ReliabilityTab({ result }: { result: EnsembleResult }) {
-  const { kappa, cosine, embeddingBackend, runCount, saturation } = result.reliability;
+  const { kappa, alpha, cosine, embeddingBackend, runCount, saturation } = result.reliability;
   const paradigmId = result.config.paradigm;
   const paradigm = paradigmId ? PARADIGMS[paradigmId] : null;
   const foregroundKappa = paradigm ? paradigm.foregroundKappa : true;
+  const semanticBackend = embeddingBackend === "sentence-transformers";
 
   if (runCount < 2) {
     return (
@@ -202,7 +237,21 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
         <TrustworthinessCard paradigm={paradigm} hasKappa={Boolean(kappa)} />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {!semanticBackend && (
+        <div className="flex items-start gap-3 bg-amber-900/20 border border-amber-700/50 rounded-xl p-4">
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5" />
+          <p className="text-amber-200 text-sm">
+            <span className="font-semibold">Lexical fallback embeddings.</span>{" "}
+            The semantic model (sentence-transformers) is not installed in the
+            NLP service, so themes are compared by hashed lexical overlap.
+            Paraphrases that share no words will not cluster — install{" "}
+            <code className="text-amber-300">sentence-transformers</code> for
+            semantic (paraphrase-aware) matching before interpreting thresholds.
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <MetricCard
           title={
             paradigm && !paradigm.kappaAppropriate
@@ -215,6 +264,17 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
           ) : (
             <p className="text-slate-400 text-sm">
               Insufficient categorical overlap to compute κ across runs.
+            </p>
+          )}
+        </MetricCard>
+
+        <MetricCard title="Krippendorff's α">
+          {alpha ? (
+            <AlphaDisplay alpha={alpha} />
+          ) : (
+            <p className="text-slate-400 text-sm">
+              α undefined for this run profile (requires disagreement or
+              variation across runs).
             </p>
           )}
         </MetricCard>
@@ -239,7 +299,9 @@ function ReliabilityTab({ result }: { result: EnsembleResult }) {
       <p className="text-xs text-slate-500">
         Embedding backend:{" "}
         <span className="text-slate-300 font-mono">{embeddingBackend}</span>. κ
-        uses theme presence/absence (Landis &amp; Koch bands); cosine uses
+        uses theme presence/absence (Landis &amp; Koch bands); α is the
+        multi-rater nominal statistic with a bootstrap 95% CI (400 run
+        resamples, conditional on the discovered classes); cosine uses
         run-centroid similarity over theme embeddings.
         {paradigm && !paradigm.kappaAppropriate && (
           <>
@@ -313,7 +375,7 @@ function SaturationCard({
       <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
         <h4 className="text-white font-semibold text-sm flex items-center gap-2">
           <TrendingUp size={16} className="text-teal-400" />
-          Theoretical saturation curve
+          Theme-discovery curve
         </h4>
         <span
           className={`text-xs px-2 py-0.5 rounded-full border ${
@@ -323,14 +385,15 @@ function SaturationCard({
           }`}
         >
           {plateaued
-            ? "Saturation likely reached"
+            ? "No new themes in last run"
             : "New themes still emerging"}
         </span>
       </div>
       <p className="text-slate-500 text-xs mb-4 max-w-2xl">
-        Distinct theme classes discovered as runs accumulate. Saturation is a
-        process, not a fixed number — when additional runs add no new classes,
-        the analysis has likely saturated.
+        Distinct theme classes discovered as runs accumulate. This is a
+        discovery curve over ≤{runCount} runs of one model — a plateau suggests
+        (but does not prove) saturation; saturation is a process, not a fixed
+        number.
       </p>
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
@@ -372,12 +435,52 @@ function KappaDisplay({
           {KAPPA_BAND_LABEL[band]}
         </span>
       </div>
+      {kappa.ci95 && (
+        <p className="text-slate-500 text-xs mt-1 font-mono">
+          95% CI [{kappa.ci95[0].toFixed(3)}, {kappa.ci95[1].toFixed(3)}]
+        </p>
+      )}
       <p className="text-slate-400 text-sm mt-3">
         Range: {kappa.minKappa.toFixed(3)} – {kappa.maxKappa.toFixed(3)} across{" "}
         {kappa.pairwise.length} run pairs.{" "}
         <span className="text-slate-300">
           {KAPPA_BAND_DESCRIPTION[band]}
         </span>
+      </p>
+    </div>
+  );
+}
+
+function AlphaDisplay({
+  alpha,
+}: {
+  alpha: NonNullable<EnsembleResult["reliability"]["alpha"]>;
+}) {
+  const v = alpha.value;
+  const label =
+    v >= 0.8 ? "High" : v >= 0.667 ? "Acceptable" : v >= 0.4 ? "Tentative" : "Unreliable";
+  const color = v >= 0.8 ? "#0d9488" : v >= 0.667 ? "#3b82f6" : v >= 0.4 ? "#f59e0b" : "#ef4444";
+  return (
+    <div>
+      <div className="flex items-end gap-4">
+        <div className="text-5xl font-bold font-mono" style={{ color }}>
+          {v.toFixed(3)}
+        </div>
+        <span
+          className="mb-1 text-sm font-semibold px-3 py-1 rounded-full border"
+          style={{ color, borderColor: color, backgroundColor: `${color}22` }}
+        >
+          {label}
+        </span>
+      </div>
+      {alpha.ci95 && (
+        <p className="text-slate-500 text-xs mt-1 font-mono">
+          95% CI [{alpha.ci95[0].toFixed(3)}, {alpha.ci95[1].toFixed(3)}]
+        </p>
+      )}
+      <p className="text-slate-400 text-sm mt-3">
+        Krippendorff recommends α ≥ 0.80 (≥ 0.667 for tentative conclusions).
+        Multi-rater statistic over all runs jointly — no pairwise averaging.
       </p>
     </div>
   );
@@ -493,15 +596,15 @@ function ConsensusTab({
   annotations: Record<string, ThemeAnnotation>;
   onSelectTheme: (idx: number) => void;
 }) {
-  const themes: ConsensusTheme[] = result.reliability.consensus.themes;
   const allThemes = result.reliability.consensus.themes;
-  const high = themes.filter((t) => t.tier === "high");
-  const moderate = themes.filter((t) => t.tier === "moderate");
+  const high = allThemes
+    .map((theme, idx) => ({ theme, idx }))
+    .filter(({ theme }) => theme.tier === "high");
+  const moderate = allThemes
+    .map((theme, idx) => ({ theme, idx }))
+    .filter(({ theme }) => theme.tier === "moderate");
 
-  const indexByLabel = (label: string) =>
-    allThemes.findIndex((t) => t.label === label);
-
-  if (themes.length === 0) {
+  if (allThemes.length === 0) {
     return (
       <InfoBox>
         No themes met the consensus threshold ({Math.round((result.config.minOccurrenceRatio ?? 0.5) * 100)}%
@@ -519,16 +622,14 @@ function ConsensusTab({
       <ThemeGroup
         title="High confidence"
         subtitle={`Appears in ≥83% of runs (${result.reliability.runCount})`}
-        themes={high}
-        allThemes={allThemes}
+        entries={high}
         annotations={annotations}
         onSelectTheme={onSelectTheme}
       />
       <ThemeGroup
         title="Moderate confidence"
         subtitle={`Appears in 50–66% of runs — warrants researcher review`}
-        themes={moderate}
-        allThemes={allThemes}
+        entries={moderate}
         annotations={annotations}
         onSelectTheme={onSelectTheme}
       />
@@ -539,19 +640,17 @@ function ConsensusTab({
 function ThemeGroup({
   title,
   subtitle,
-  themes,
-  allThemes,
+  entries,
   annotations,
   onSelectTheme,
 }: {
   title: string;
   subtitle: string;
-  themes: ConsensusTheme[];
-  allThemes: ConsensusTheme[];
+  entries: { theme: ConsensusTheme; idx: number }[];
   annotations: Record<string, ThemeAnnotation>;
   onSelectTheme: (idx: number) => void;
 }) {
-  if (themes.length === 0) return null;
+  if (entries.length === 0) return null;
   return (
     <div>
       <div className="mb-3">
@@ -559,17 +658,14 @@ function ThemeGroup({
         <p className="text-slate-500 text-xs">{subtitle}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {themes.map((theme) => {
-          const idx = allThemes.findIndex((t) => t.label === theme.label);
-          return (
-            <ConsensusCard
-              key={theme.label}
-              theme={theme}
-              annotation={annotations[theme.label]}
-              onClick={() => onSelectTheme(idx)}
-            />
-          );
-        })}
+        {entries.map(({ theme, idx }) => (
+          <ConsensusCard
+            key={idx}
+            theme={theme}
+            annotation={annotations[String(idx)]}
+            onClick={() => onSelectTheme(idx)}
+          />
+        ))}
       </div>
     </div>
   );
@@ -675,7 +771,11 @@ function OverviewTab({ result }: { result: EnsembleResult }) {
         </div>
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4">Sentiment (VADER)</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">
+          {result.sentiment.basis === "per-row-mean"
+            ? "Sentiment (VADER, per-response mean)"
+            : "Sentiment (VADER)"}
+        </h3>
         <div className="flex items-center justify-center h-64 gap-8">
           <SentimentRing label="Positive" value={result.sentiment.positive} color="#0d9488" />
           <SentimentRing label="Neutral" value={result.sentiment.neutral} color="#3b82f6" />
@@ -781,16 +881,43 @@ function PipelineTab({ result }: { result: EnsembleResult }) {
     return <InfoBox>Pipeline trace unavailable (older analysis format).</InfoBox>;
   }
   const rows: { label: string; value: string; hint?: string }[] = [
-    { label: "Input size", value: `${t.inputChars.toLocaleString()} chars`, hint: "raw uploaded file" },
+    { label: "Input size", value: `${t.inputChars.toLocaleString()} chars`, hint: "text extracted from upload" },
     { label: "After cleaning", value: `${t.cleanedChars.toLocaleString()} chars`, hint: "NLTK preprocessing applied" },
-    { label: "Sent to LLM", value: `${t.chunkChars.toLocaleString()} chars`, hint: "truncated chunk per run" },
+    {
+      label: "Sent to LLM",
+      value: `${t.chunkChars.toLocaleString()} chars`,
+      hint: t.chunkCount && t.chunkCount > 1
+        ? `analyzed in ${t.chunkCount} chunks per run, themes merged`
+        : "single chunk per run",
+    },
     { label: "Preprocessing", value: t.preprocessed ? "tokenize · lemmatize · stopwords" : "none" },
-    { label: "Embedding backend", value: t.embeddingBackend, hint: "used for κ + cosine + evidence" },
+    { label: "Embedding backend", value: t.embeddingBackend, hint: "used for κ + α + cosine + evidence" },
     { label: "Cosine threshold", value: t.cosineThreshold.toFixed(2), hint: "theme-equivalence cutoff" },
     { label: "Min occurrence ratio", value: `${Math.round(t.minOccurrenceRatio * 100)}%`, hint: "consensus threshold" },
     { label: "Temperature", value: t.temperature.toFixed(1), hint: "LLM sampling randomness" },
     { label: "Seeds", value: t.seeds.join(", "), hint: `${t.seeds.length} independent runs` },
   ];
+  if (t.csv) {
+    rows.splice(1, 0, {
+      label: "Source",
+      value: `tabular · ${t.csv.rowCount.toLocaleString()} rows`,
+      hint: `delimiter "${t.csv.delimiter === "\t" ? "\\t" : t.csv.delimiter}" · ${t.csv.encoding} · column(s): ${t.csv.textColumnNames.join(", ") || "auto-detected"}`,
+    });
+  }
+  if (t.inputTruncated) {
+    rows.push({
+      label: "Input truncated",
+      value: "yes",
+      hint: "document exceeded the per-run chunk budget (4 × 8,000 chars)",
+    });
+  }
+  if (t.failedRunCount && t.failedRunCount > 0) {
+    rows.push({
+      label: "Excluded runs",
+      value: `${t.failedRunCount} of ${t.seeds.length}`,
+      hint: "failed request/parse — not scored by reliability",
+    });
+  }
   return (
     <div className="space-y-5">
       <div>

@@ -1,0 +1,62 @@
+respondent_id,satisfaction,response_date,feedback
+R001,4,2026-02-11,Search rarely finds my older documents even when I remember the exact title during the pilot with my team.
+R002,5,2026-03-12,The onboarding flow felt confusing at first but the tooltips helped me recover after the spring migration.
+R003,5,2026-04-13,I kept losing my progress between sessions which made me distrust draft saving when working from the office.
+R004,2,2026-05-14,The onboarding flow felt confusing at first but the tooltips helped me recover across our three regional offices.
+R005,4,2026-06-15,The onboarding flow felt confusing at first but the tooltips helped me recover after the spring migration.
+R006,2,2026-07-16,The dashboard finally loads quickly after the update and charts render correctly after the spring migration.
+R007,4,2026-08-17,I kept losing my progress between sessions which made me distrust draft saving across our three regional offices.
+R008,1,2026-09-18,The onboarding flow felt confusing at first but the tooltips helped me recover after the pricing change was announced.
+R009,5,2026-01-10,The pricing page contradicts what the sales team promised during the evaluation during the holiday peak period.
+R010,5,2026-02-11,The onboarding flow felt confusing at first but the tooltips helped me recover after the pricing change was announced.
+R011,2,2026-03-12,The dashboard finally loads quickly after the update and charts render correctly within the first week of rollout.
+R012,2,2026-04-13,The onboarding flow felt confusing at first but the tooltips helped me recover across our three regional offices.
+R013,2,2026-05-14,Notifications arrive too frequently so I muted them and now I miss release notes while training new colleagues.
+R014,3,2026-06-15,I kept losing my progress between sessions which made me distrust draft saving after the pricing change was announced.
+R015,5,2026-07-16,Support responded within minutes and resolved the billing error without friction after the spring migration.
+R016,1,2026-08-17,The pricing page contradicts what the sales team promised during the evaluation when working from the office.
+R017,1,2026-09-18,I kept losing my progress between sessions which made me distrust draft saving after the pricing change was announced.
+R018,5,2026-01-10,The pricing page contradicts what the sales team promised during the evaluation in the quarterly audit.
+R019,4,2026-02-11,The dashboard finally loads quickly after the update and charts render correctly when working from the office.
+R020,3,2026-03-12,Exporting large datasets times out which blocks my monthly reporting workflow when working from the office.
+R021,2,2026-04-13,The pricing page contradicts what the sales team promised during the evaluation during the pilot with my team.
+R022,3,2026-05-14,I kept losing my progress between sessions which made me distrust draft saving after the pricing change was announced.
+R023,4,2026-06-15,"The mobile app crashed during verification.
+It lost my scanned documents and I had to restart the whole upload twice."
+R024,1,2026-07-16,Notifications arrive too frequently so I muted them and now I miss release notes after the pricing change was announced.
+R025,4,2026-08-17,I kept losing my progress between sessions which made me distrust draft saving across our three regional offices.
+R026,2,2026-09-18,Support responded within minutes and resolved the billing error without friction when working from the office.
+R027,1,2026-01-10,Exporting large datasets times out which blocks my monthly reporting workflow while training new colleagues.
+R028,5,2026-02-11,I kept losing my progress between sessions which made me distrust draft saving across our three regional offices.
+R029,3,2026-03-12,Search rarely finds my older documents even when I remember the exact title when working from the office.
+R030,4,2026-04-13,Exporting large datasets times out which blocks my monthly reporting workflow after the pricing change was announced.
+R031,3,2026-05-14,I kept losing my progress between sessions which made me distrust draft saving after the spring migration.
+R032,1,2026-06-15,Exporting large datasets times out which blocks my monthly reporting workflow on the free tier.
+R033,3,2026-07-16,The onboarding flow felt confusing at first but the tooltips helped me recover on the free tier.
+R034,4,2026-08-17,Exporting large datasets times out which blocks my monthly reporting workflow on the mobile app specifically.
+R035,4,2026-09-18,Search rarely finds my older documents even when I remember the exact title within the first week of rollout.
+R036,5,2026-01-10,Search rarely finds my older documents even when I remember the exact title during the pilot with my team.
+R037,1,2026-02-11,I kept losing my progress between sessions which made me distrust draft saving in the quarterly audit.
+R038,2,2026-03-12,The pricing page contradicts what the sales team promised during the evaluation on the mobile app specifically.
+R039,4,2026-04-13,The pricing page contradicts what the sales team promised during the evaluation while training new colleagues.
+R040,2,2026-05-14,Exporting large datasets times out which blocks my monthly reporting workflow after the spring migration.
+R041,5,2026-06-15,Exporting large datasets times out which blocks my monthly reporting workflow while training new colleagues.
+R042,4,2026-07-16,Notifications arrive too frequently so I muted them and now I miss release notes during the pilot with my team.
+R043,4,2026-08-17,Notifications arrive too frequently so I muted them and now I miss release notes on the free tier.
+R044,4,2026-09-18,Search rarely finds my older documents even when I remember the exact title during the holiday peak period.
+R045,1,2026-01-10,The pricing page contradicts what the sales team promised during the evaluation during the pilot with my team.
+R046,2,2026-02-11,Support responded within minutes and resolved the billing error without friction during the pilot with my team.
+R047,4,2026-03-12,The pricing page contradicts what the sales team promised during the evaluation within the first week of rollout.
+R048,3,2026-04-13,Support responded within minutes and resolved the billing error without friction on the mobile app specifically.
+R049,4,2026-05-14,The onboarding flow felt confusing at first but the tooltips helped me recover during the pilot with my team.
+R050,5,2026-06-15,Search rarely finds my older documents even when I remember the exact title after the pricing change was announced.
+R051,5,2026-07-16,Search rarely finds my older documents even when I remember the exact title during the pilot with my team.
+R052,5,2026-08-17,The onboarding flow felt confusing at first but the tooltips helped me recover in the quarterly audit.
+R053,4,2026-09-18,The dashboard finally loads quickly after the update and charts render correctly while training new colleagues.
+R054,4,2026-01-10,The dashboard finally loads quickly after the update and charts render correctly after the spring migration.
+R055,2,2026-02-11,The dashboard finally loads quickly after the update and charts render correctly within the first week of rollout.
+R056,4,2026-03-12,I kept losing my progress between sessions which made me distrust draft saving compared to the previous vendor.
+R057,3,2026-04-13,Support responded within minutes and resolved the billing error without friction after the spring migration.
+R058,1,2026-05-14,The onboarding flow felt confusing at first but the tooltips helped me recover after the spring migration.
+R059,1,2026-06-15,Support responded within minutes and resolved the billing error without friction across our three regional offices.
+R060,1,2026-07-16,Search rarely finds my older documents even when I remember the exact title after the pricing change was announced.

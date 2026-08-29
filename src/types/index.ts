@@ -13,6 +13,8 @@ export interface AnalysisResult {
     positive: number;
     neutral: number;
     negative: number;
+    /** How sentiment was computed (e.g. "per-row-mean" for tabular input). */
+    basis?: string;
   };
   cleanedText: string;
 }
@@ -103,8 +105,10 @@ export interface RunProvenance {
   status: "ok" | "parse_failed" | "request_failed";
   /** Error message when status !== "ok". */
   error?: string;
-  /** Character length of the text chunk actually sent. */
+  /** Character length of the text analyzed by this run (all chunks). */
   textChunkLength: number;
+  /** Number of chunks this run analyzed (long-document chunking). */
+  chunkCount?: number;
 }
 
 /** One independent thematic-analysis run, carrying its provenance. */
@@ -133,6 +137,15 @@ export interface KappaResult {
   maxKappa: number;
   pairwise: (PairwiseScore & { kappa: number })[];
   band: KappaBand;
+  /** Bootstrap 95% CI over run resamples (conditional on discovered classes). */
+  ci95?: [number, number] | null;
+}
+
+/** Krippendorff's nominal alpha over theme presence/absence. */
+export interface AlphaResult {
+  value: number;
+  /** Bootstrap 95% CI over run resamples; null when too few valid resamples. */
+  ci95: [number, number] | null;
 }
 
 export interface CosineResult {
@@ -183,6 +196,10 @@ export interface EvidenceSpan {
   text: string;
   cosine: number;
   unitIndex: number;
+  /** Excel-style record number (header = row 1) — tabular mode only. */
+  rowIndex?: number;
+  /** Source column name — tabular mode only. */
+  columnName?: string;
 }
 
 export interface ConsensusResult {
@@ -192,12 +209,16 @@ export interface ConsensusResult {
 
 /** Records every transformation applied to the data (pipeline transparency). */
 export interface PipelineTrace {
-  /** Source character count before preprocessing. */
+  /** Source character count before preprocessing (extracted text, not bytes). */
   inputChars: number;
   /** Cleaned-text character count after preprocessing. */
   cleanedChars: number;
-  /** Character length of the chunk sent to the LLM (after truncation). */
+  /** Character length of the text sent to the LLM (all chunks, per run). */
   chunkChars: number;
+  /** Number of chunks the document was split into per run. */
+  chunkCount?: number;
+  /** True when input exceeded the per-run chunk budget and was cut. */
+  inputTruncated?: boolean;
   /** Whether stopwords/lemmatization were applied by the NLP service. */
   preprocessed: boolean;
   /** Embedding backend used for reliability (sentence-transformers | tfidf). */
@@ -210,6 +231,17 @@ export interface PipelineTrace {
   /** Research design choices recorded for transparency. */
   paradigm?: ParadigmId;
   framework?: FrameworkId;
+  /** Runs excluded from reliability scoring (request/parse failures). */
+  failedRunCount?: number;
+  /** Runs actually scored by the reliability engine. */
+  reliabilityRunCount?: number;
+  /** Tabular-source metadata (CSV uploads only). */
+  csv?: {
+    delimiter: string;
+    encoding: string;
+    rowCount: number;
+    textColumnNames: string[];
+  };
 }
 
 /** One point on the theoretical-saturation curve. */
@@ -226,9 +258,13 @@ export interface ReliabilityReport {
   minOccurrenceRatio: number;
   consensus: ConsensusResult;
   kappa: KappaResult | null;
+  /** Krippendorff's alpha (multi-rater; undefined -> null). */
+  alpha?: AlphaResult | null;
   cosine: CosineResult | null;
   /** Theoretical-saturation curve: distinct theme classes per run prefix. */
   saturation: SaturationPoint[];
+  /** True when the engine capped the number of themes it clustered. */
+  truncated?: boolean;
 }
 
 /** A researcher's case-by-case judgement on a consensus theme. */

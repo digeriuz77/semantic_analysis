@@ -23,7 +23,7 @@ interface ThemeLineageViewProps {
   themeIndex: number;
   runSeeds: number[];
   annotation?: ThemeAnnotation;
-  onAnnotate: (label: string, annotation: ThemeAnnotation) => void;
+  onAnnotate: (annotation: ThemeAnnotation) => void;
   onBack: () => void;
 }
 
@@ -41,7 +41,7 @@ export function ThemeLineageView({
   const [note, setNote] = useState(annotation?.note ?? "");
 
   const save = () => {
-    onAnnotate(theme.label, {
+    onAnnotate({
       status: annoStatus,
       note: note.trim(),
       updatedAt: new Date().toISOString(),
@@ -183,8 +183,16 @@ export function ThemeLineageView({
                       className="bg-slate-950 border border-slate-800 rounded-lg p-3"
                     >
                       <p className="text-slate-300 text-sm">{span.text}</p>
-                      <span className="text-xs text-slate-600 font-mono mt-1 inline-block">
-                        cosine {span.cosine.toFixed(3)} ({cosinePercent(span.cosine)}%)
+                      <span className="text-xs text-slate-600 font-mono mt-1 inline-flex items-center gap-2 flex-wrap">
+                        {span.rowIndex !== undefined ? (
+                          <span className="text-teal-500/80">
+                            row {span.rowIndex}
+                            {span.columnName ? ` · ${span.columnName}` : ""}
+                          </span>
+                        ) : null}
+                        <span>
+                          cosine {span.cosine.toFixed(3)} ({cosinePercent(span.cosine)}%)
+                        </span>
                       </span>
                     </div>
                   ))}

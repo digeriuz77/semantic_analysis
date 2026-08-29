@@ -22,7 +22,7 @@ export const geminiAdapter: ChatAdapter = {
     if (!key) throw new Error("Missing GEMINI_API_KEY");
 
     const model = req.model || DEFAULT_MODEL;
-    const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${key}`;
+    const url = `${GEMINI_BASE_URL}/${model}:generateContent`;
 
     const body: Record<string, unknown> = {
       contents: [{ parts: [{ text: req.user }] }],
@@ -37,7 +37,8 @@ export const geminiAdapter: ChatAdapter = {
 
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // Key in a header, never the URL: query strings leak into logs/proxies.
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

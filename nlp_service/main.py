@@ -1,11 +1,10 @@
-import os
 import io
+import json
 import re
-import math
 import string
-from typing import List, Dict, Any
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from typing import Any, Dict, List, Optional
+import numpy as np
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
@@ -13,7 +12,15 @@ from nltk.stem import WordNetLemmatizer
 from nltk.probability import FreqDist
 from collections import Counter
 
-from reliability import compute_reliability, embed_texts
+from reliability import compute_reliability, embed_texts, get_embedding_backend
+from tabular import (
+    AnalysisUnit,
+    TabularError,
+    build_units,
+    classify_columns,
+    read_tabular,
+    suggested_text_columns,
+)
 
 # Try importing optional heavy dependencies
 try:
@@ -28,12 +35,13 @@ try:
 except ImportError:
     DOCX_SUPPORT = False
 
-# Initialize NLTK data
+# Initialize NLTK data (both tagger names: resource renamed in NLTK 3.9).
 nltk.download("punkt", quiet=True)
 nltk.download("punkt_tab", quiet=True)
 nltk.download("stopwords", quiet=True)
 nltk.download("wordnet", quiet=True)
 nltk.download("averaged_perceptron_tagger", quiet=True)
+nltk.download("averaged_perceptron_tagger_eng", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 
 # VADER sentiment analyzer (validated lexicon; degrades to heuristic if absent).
@@ -47,13 +55,12 @@ except Exception:
 
 app = FastAPI(title="NLP Service for Thematic Analyzer")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 300
+MAX_DOCX_PARAGRAPHS = 5000
+MAX_RELIABILITY_RUNS = 24
+MAX_THEMES_PER_RUN = 100
+MAX_FLAT_THEMES = 800
 
 STOP_WORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
@@ -71,7 +78,7 @@ NEGATIVE_WORDS = {
 }
 
 
-def compute_sentiment(text: str, processed_words: PyList[str]) -> Dict[str, float]:
+def compute_sentiment(text: str, processed_words: List[str]) -> Dict[str, float]:
     """VADER sentiment (validated lexicon); lexical fallback if unavailable."""
     if VADER_OK and SIA is not None:
         scores = SIA.polarity_scores(text)
@@ -117,17 +124,27 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         return file_content.decode("utf-8", errors="ignore")
     elif ext == "csv":
         return file_content.decode("utf-8", errors="ignore")
-    elif ext == "pdf" and PDF_SUPPORT:
+    elif ext == "pdf":
+        if not PDF_SUPPORT:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+        if not file_content.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="Invalid PDF file (bad magic bytes)")
         text = ""
         with pdfplumber.open(io.BytesIO(file_content)) as pdf:
-            for page in pdf.pages:
+            for page in pdf.pages[:MAX_PDF_PAGES]:
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
         return text
-    elif ext == "docx" and DOCX_SUPPORT:
+    elif ext == "docx":
+        if not DOCX_SUPPORT:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+        if not file_content.startswith(b"PK\x03\x04"):
+            raise HTTPException(status_code=400, detail="Invalid DOCX file (bad magic bytes)")
         doc = Document(io.BytesIO(file_content))
-        return "\n".join([para.text for para in doc.paragraphs])
+        return "\n".join(
+            [para.text for para in doc.paragraphs[:MAX_DOCX_PARAGRAPHS]]
+        )
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
@@ -212,23 +229,181 @@ def process_corpus(text: str) -> Dict[str, Any]:
     }
 
 
-@app.post("/process")
-async def process_file(file: UploadFile = File(...)):
+def compute_sentiment_tabular(units: List[AnalysisUnit]) -> Dict[str, object]:
+    """Per-response VADER, averaged over units; lexical fallback per unit."""
+    if VADER_OK and SIA is not None:
+        pos = neu = neg = 0.0
+        count = 0
+        for unit in units:
+            scores = SIA.polarity_scores(unit.text)
+            pos += scores["pos"]
+            neu += scores["neu"]
+            neg += scores["neg"]
+            count += 1
+        if count == 0:
+            return {"positive": 33.3, "neutral": 33.4, "negative": 33.3, "basis": "per-row-mean"}
+        return {
+            "positive": round(pos / count * 100, 1),
+            "neutral": round(neu / count * 100, 1),
+            "negative": round(neg / count * 100, 1),
+            "basis": "per-row-mean",
+        }
+    # Lexical fallback: per-unit counts, then mean of percentages.
+    percents: List[Dict[str, float]] = []
+    for unit in units:
+        words = [w for w in word_tokenize(unit.text.lower()) if w.isalpha()]
+        if not words:
+            continue
+        pos_n = sum(1 for w in words if w in POSITIVE_WORDS)
+        neg_n = sum(1 for w in words if w in NEGATIVE_WORDS)
+        percents.append(
+            {
+                "positive": pos_n / len(words) * 100,
+                "neutral": max(0, len(words) - pos_n - neg_n) / len(words) * 100,
+                "negative": neg_n / len(words) * 100,
+            }
+        )
+    if not percents:
+        return {"positive": 33.3, "neutral": 33.4, "negative": 33.3, "basis": "per-row-mean"}
+    n = len(percents)
+    return {
+        "positive": round(sum(p["positive"] for p in percents) / n, 1),
+        "neutral": round(sum(p["neutral"] for p in percents) / n, 1),
+        "negative": round(sum(p["negative"] for p in percents) / n, 1),
+        "basis": "per-row-mean",
+    }
+
+
+@app.post("/inspect")
+async def inspect_file(file: UploadFile = File(...)):
+    """Lightweight metadata for the column picker: mode + column profile.
+
+    CSV files are parsed and classified; prose types return {"mode": "prose"}.
+    """
     try:
         contents = await file.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File exceeds the 10 MB size limit")
+        ext = (file.filename or "").split(".")[-1].lower()
+        if ext != "csv":
+            return {"fileName": file.filename, "mode": "prose"}
+
+        table = read_tabular(contents)
+        metas = classify_columns(table)
+        return {
+            "fileName": file.filename,
+            "mode": "tabular",
+            "delimiter": table.delimiter,
+            "encoding": table.encoding,
+            "rowCount": len(table.rows),
+            "truncated": table.truncated,
+            "columns": [m.__dict__ for m in metas],
+            "suggestedTextColumns": suggested_text_columns(metas),
+        }
+    except TabularError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal error inspecting file")
+
+
+@app.post("/process")
+async def process_file(
+    file: UploadFile = File(...),
+    text_columns: Optional[str] = Form(None),
+):
+    try:
+        contents = await file.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File exceeds the 10 MB size limit")
+
+        ext = (file.filename or "").split(".")[-1].lower()
+        if ext == "csv":
+            return process_tabular(contents, file.filename, text_columns)
+
         text = extract_text_from_file(contents, file.filename)
 
         if not text or len(text.strip()) == 0:
             raise HTTPException(status_code=400, detail="File is empty or could not be read")
 
         result = process_corpus(text)
+        # Punctuation-preserving extraction for sentence-level evidence
+        # retrieval downstream (clean_text strips punctuation, which collapses
+        # sent_tokenize into one giant span).
+        result["extracted_text"] = text[:200_000]
+        result["mode"] = "prose"
         return result
 
+    except TabularError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal error processing file")
+
+
+def process_tabular(contents: bytes, filename: str, text_columns: Optional[str]) -> Dict[str, Any]:
+    """Tabular ingestion: parse, select text columns, build row-indexed units.
+
+    The LLM analyzes the unit document (one cleaned response per row); the
+    units themselves travel to /evidence so spans cite row + column. Prose-only
+    statistics (Flesch, lexical density) are nulled rather than misreported.
+    """
+    table = read_tabular(contents)
+    metas = classify_columns(table)
+
+    selected: List[int]
+    if text_columns:
+        try:
+            parsed = json.loads(text_columns)
+            if not isinstance(parsed, list) or not all(
+                isinstance(i, int) and not isinstance(i, bool) for i in parsed
+            ):
+                raise ValueError
+            selected = [i for i in parsed if 0 <= i < len(table.header)]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="'text_columns' must be a JSON int array")
+        if not selected:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid text columns selected",
+            )
+    else:
+        selected = suggested_text_columns(metas)
+        if not selected:
+            raise HTTPException(
+                status_code=400,
+                detail="No free-text column detected; select response columns manually",
+            )
+
+    units, skipped = build_units(table, selected)
+    raw_doc = "\n\n".join(u.text for u in units)
+    cleaned_doc = "\n\n".join(clean_text(u.text) for u in units)
+
+    result = process_corpus(cleaned_doc)
+    # Honest statistics for tabular input: prose-only metrics are undefined
+    # over concatenated independent responses — null them and say why.
+    result["stats"]["flesch_reading_ease"] = None
+    result["stats"]["lexical_density"] = None
+    result["stats"]["mode"] = "tabular"
+    result["stats"]["sentences"] = len(units)  # responses, not sentences
+    result["sentiment"] = compute_sentiment_tabular(units)
+    result["cleaned_text"] = cleaned_doc
+    result["extracted_text"] = raw_doc[:200_000]
+    result["mode"] = "tabular"
+    result["csv"] = {
+        "delimiter": table.delimiter,
+        "encoding": table.encoding,
+        "rowCount": len(table.rows),
+        "totalDataRows": table.total_data_rows,
+        "textColumns": selected,
+        "textColumnNames": [table.header[i] for i in selected],
+        "skippedShortCells": skipped,
+        "truncatedRows": table.truncated,
+    }
+    result["units"] = [u.as_dict() for u in units]
+    return result
 
 
 @app.post("/reliability")
@@ -243,12 +418,24 @@ async def reliability_endpoint(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
     runs = body.get("runs", [])
     if not isinstance(runs, list):
         raise HTTPException(status_code=400, detail="'runs' must be a list")
+    if len(runs) > MAX_RELIABILITY_RUNS:
+        raise HTTPException(status_code=400, detail=f"Too many runs (max {MAX_RELIABILITY_RUNS})")
+    for run in runs:
+        if not isinstance(run, dict):
+            raise HTTPException(status_code=400, detail="Each run must be an object")
+        themes = run.get("themes", [])
+        if not isinstance(themes, list):
+            raise HTTPException(status_code=400, detail="'themes' must be a list")
+        if len(themes) > MAX_THEMES_PER_RUN:
+            raise HTTPException(status_code=400, detail=f"Too many themes in one run (max {MAX_THEMES_PER_RUN})")
     cosine_threshold = float(body.get("cosine_threshold", 0.70))
     min_occurrence_ratio = float(body.get("min_occurrence_ratio", 0.5))
-    return compute_reliability(runs, cosine_threshold, min_occurrence_ratio)
+    return compute_reliability(runs, cosine_threshold, min_occurrence_ratio, max_flat_themes=MAX_FLAT_THEMES)
 
 
 @app.post("/embed")
@@ -262,7 +449,9 @@ async def embed_endpoint(request: Request):
     texts = body.get("texts", [])
     if not isinstance(texts, list):
         raise HTTPException(status_code=400, detail="'texts' must be a list")
-    vecs, backend = embed_texts([str(t) for t in texts])
+    if len(texts) > 500:
+        raise HTTPException(status_code=400, detail="Too many texts (max 500)")
+    vecs, backend = embed_texts([str(t)[:5000] for t in texts])
     return {
         "vectors": vecs.tolist(),
         "dim": int(vecs.shape[1]) if vecs.size else 0,
@@ -275,42 +464,94 @@ async def embed_endpoint(request: Request):
 async def evidence_endpoint(request: Request):
     """Retrieve supporting text spans from the source corpus for each theme.
 
-    Splits the source text into sentence-level units, embeds both the units and
-    the theme descriptions, and returns the top-k most semantically similar
-    source spans per theme. This grounds each theme in traceable evidence even
-    when the LLM did not return explicit quotes.
+    Two modes:
+    * ``units`` — pre-split analysis units (tabular): ``[{text, rowIndex,
+      columnName}]``. Spans cite row + column provenance.
+    * ``text`` — prose: sentence-split here (punctuation preserved).
     """
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    source = str(body.get("text", ""))
     themes = body.get("themes", [])
     top_k = int(body.get("top_k", 3))
+    raw_units = body.get("units")
+
+    # --- units mode (tabular): whole-cell units with row provenance ---
+    if isinstance(raw_units, list):
+        if not isinstance(themes, list) or not raw_units or not themes:
+            empty: List[List[Dict[str, Any]]] = (
+                [[] for _ in themes] if isinstance(themes, list) else []
+            )
+            return {"evidence": empty}
+        units: List[str] = []
+        provenance: List[Dict[str, Any]] = []
+        for u in raw_units:
+            if not isinstance(u, dict):
+                continue
+            text = str(u.get("text", ""))[:5000]
+            if len(text.strip()) < 15:
+                continue  # shorter filter than prose (25): survey answers are terse
+            units.append(text)
+            prov: Dict[str, Any] = {"unitIndex": len(units) - 1}
+            if isinstance(u.get("rowIndex"), int):
+                prov["rowIndex"] = u["rowIndex"]
+            if u.get("columnName"):
+                prov["columnName"] = str(u["columnName"])
+            provenance.append(prov)
+        if not units:
+            return {"evidence": [[] for _ in themes]}
+        theme_texts = [
+            (str(t.get("name", "")) + ". " + str(t.get("description", ""))).strip(". ")
+            for t in themes
+        ]
+        vecs, _ = embed_texts(units + theme_texts)
+        unit_vecs = vecs[: len(units)]
+        theme_vecs = vecs[len(units):]
+        evidence: List[List[Dict[str, Any]]] = []
+        for ti in range(len(themes)):
+            sims = theme_vecs[ti] @ unit_vecs.T
+            order = np.argsort(-sims)[:top_k]
+            spans = [
+                {
+                    "text": units[idx],
+                    "cosine": round(float(sims[idx]), 4),
+                    **provenance[idx],
+                }
+                for idx in order
+                if float(sims[idx]) > 0
+            ]
+            evidence.append(spans)
+        return {"evidence": evidence}
+
+    # --- prose mode (unchanged) ---
+    source = str(body.get("text", ""))
     if not isinstance(themes, list) or not source:
         return {"evidence": []}
 
-    units = [u.strip() for u in sent_tokenize(source) if len(u.strip()) > 25]
-    if not units or not themes:
-        empty: List[List[Dict[str, Any]]] = [[] for _ in themes] if isinstance(themes, list) else []
-        return {"evidence": empty}
+    units_prose = [u.strip() for u in sent_tokenize(source) if len(u.strip()) > 25]
+    if not units_prose or not themes:
+        empty_prose: List[List[Dict[str, Any]]] = (
+            [[] for _ in themes] if isinstance(themes, list) else []
+        )
+        return {"evidence": empty_prose}
 
     theme_texts = [
         (str(t.get("name", "")) + ". " + str(t.get("description", ""))).strip(". ")
         for t in themes
     ]
-    all_texts = units + theme_texts
+    all_texts = units_prose + theme_texts
     vecs, _ = embed_texts(all_texts)
-    unit_vecs = vecs[: len(units)]
-    theme_vecs = vecs[len(units):]
+    unit_vecs = vecs[: len(units_prose)]
+    theme_vecs = vecs[len(units_prose):]
 
-    evidence: List[List[Dict[str, Any]]] = []
+    evidence = []
     for ti, theme_obj in enumerate(themes):
         sims = theme_vecs[ti] @ unit_vecs.T
         order = np.argsort(-sims)[:top_k]
         spans = [
             {
-                "text": units[idx],
+                "text": units_prose[idx],
                 "cosine": round(float(sims[idx]), 4),
                 "unitIndex": int(idx),
             }
@@ -326,7 +567,7 @@ async def health_check():
     return {
         "status": "healthy",
         "nltk_data": "loaded",
-        "embedding_backend": "sentence-transformers" if _ST_AVAILABLE() else "tfidf",
+        "embedding_backend": get_embedding_backend(),
     }
 
 
