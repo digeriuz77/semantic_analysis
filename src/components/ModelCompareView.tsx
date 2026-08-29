@@ -16,7 +16,7 @@ interface ModelCompareViewProps {
 }
 
 const DEFAULT_MODELS: Partial<Record<LlmProvider, string>> = {
-  fireworks: "accounts/fireworks/models/llama-v3-70b-instruct",
+  fireworks: "accounts/fireworks/models/glm-5p3",
   openai: "gpt-4o",
   anthropic: "claude-3-5-sonnet-20241022",
   gemini: "gemini-1.5-pro",

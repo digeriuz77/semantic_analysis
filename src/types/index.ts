@@ -76,7 +76,7 @@ export interface RunConfig {
   seeds: number[];
   /** Sampling temperature in [0, 2]. Lower = more deterministic. */
   temperature: number;
-  /** Provider-specific model id, e.g. "accounts/fireworks/models/llama-v3-70b-instruct". */
+  /** Provider-specific model id, e.g. "accounts/fireworks/models/glm-5p3". */
   model: string;
   provider: LlmProvider;
   /** Custom prompt containing {seed}/{text_chunk}; undefined uses the default. */

@@ -37,7 +37,7 @@ const MAX_EVIDENCE_TEXT_CHARS = 40_000;
 const RATE_LIMIT = { limit: 10, windowMs: 5 * 60_000 };
 
 const DEFAULT_SEEDS = [42, 123, 456, 789, 1011, 1213];
-const DEFAULT_MODEL = "accounts/fireworks/models/llama-v3-70b-instruct";
+const DEFAULT_MODEL = "accounts/fireworks/models/glm-5p3";
 
 function parseSeeds(value: string | null): number[] {
   if (!value) return DEFAULT_SEEDS;

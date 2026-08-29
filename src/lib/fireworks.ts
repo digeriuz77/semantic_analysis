@@ -1,7 +1,7 @@
 import type { Theme, SpecialistResult } from "@/types";
 
 const FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions";
-const DEFAULT_MODEL = "accounts/fireworks/models/llama-v3-70b-instruct";
+const DEFAULT_MODEL = "accounts/fireworks/models/glm-5p3";
 const REQUEST_TIMEOUT_MS = 30_000;
 
 export function getFireworksApiKey(): string | undefined {

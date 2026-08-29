@@ -49,7 +49,19 @@ export const fireworksAdapter: ChatAdapter = {
     });
 
     if (!res.ok) {
-      throw new Error(`Fireworks request failed: ${res.status}`);
+      // Surface the provider's own message (invalid key, onboarding required,
+      // rate limit) so deployment misconfiguration is diagnosable from the
+      // per-run provenance panel instead of a bare status code.
+      let detail = "";
+      try {
+        const errBody = (await res.json()) as { error?: { message?: string } | string };
+        const msg =
+          typeof errBody?.error === "string" ? errBody.error : errBody?.error?.message;
+        if (msg) detail = `: ${msg}`;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(`Fireworks request failed: ${res.status}${detail}`);
     }
 
     const data = await res.json();
