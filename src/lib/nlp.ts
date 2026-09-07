@@ -1,6 +1,6 @@
 import type { ConsensusTheme, EvidenceSpan, ReliabilityReport, ThemeRun } from "@/types";
 
-const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL || "http://localhost:8000";
+const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL || "http://127.0.0.1:8000";
 const NLP_TIMEOUT_MS = 30_000;
 const RELIABILITY_TIMEOUT_MS = 60_000;
 const EVIDENCE_TIMEOUT_MS = 45_000;

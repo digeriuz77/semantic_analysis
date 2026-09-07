@@ -1,6 +1,5 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
 import { SCHEMA_SQL } from "./schema";
 
 /**
@@ -30,47 +29,53 @@ export interface DbClient {
   close(): void;
 }
 
-const cjsRequire = createRequire(import.meta.url);
-
-// Constructed specifiers so the bundler cannot statically resolve them.
-const BUN_SPEC = "bun" + ":sqlite";
-const NODE_SPEC = "node" + ":sqlite";
+function safeRequire(moduleName: string): unknown {
+  // eval("require") bypasses bundler static analysis (Turbopack/Webpack)
+  // allowing native runtime resolution of built-in modules at runtime.
+  const req = eval("require");
+  return req(moduleName);
+}
 
 function openRaw(path: string): DbClient {
-  // Try bun first (the sandbox runtime is bun).
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { Database } = cjsRequire(BUN_SPEC) as any;
-    const db = new Database(path);
-    return {
-      exec: (sql: string) => db.exec(sql),
-      prepare: (sql: string) => {
-        const stmt = db.prepare(sql);
-        return {
-          get: (...p) => stmt.get(...p),
-          all: (...p) => stmt.all(...p),
-          run: (...p) => {
-            const r = stmt.run(...p);
-            return {
-              lastInsertRowid: Number(r.lastInsertRowid),
-              changes: Number(r.changes),
-            };
-          },
-        };
-      },
-      close: () => db.close(),
-    };
-  } catch {
-    // Fall back to Node's built-in sqlite.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { DatabaseSync } = cjsRequire(NODE_SPEC) as any;
-    const db = new DatabaseSync(path);
-    return {
-      exec: (sql: string) => db.exec(sql),
-      prepare: (sql: string) => db.prepare(sql),
-      close: () => db.close(),
-    };
+  // Try bun first if running under Bun runtime.
+  const isBun = typeof (process as unknown as { versions?: { bun?: string } }).versions?.bun === "string";
+  if (isBun) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { Database } = safeRequire("bun:sqlite") as any;
+      const db = new Database(path);
+      return {
+        exec: (sql: string) => db.exec(sql),
+        prepare: (sql: string) => {
+          const stmt = db.prepare(sql);
+          return {
+            get: (...p) => stmt.get(...p),
+            all: (...p) => stmt.all(...p),
+            run: (...p) => {
+              const r = stmt.run(...p);
+              return {
+                lastInsertRowid: Number(r.lastInsertRowid),
+                changes: Number(r.changes),
+              };
+            },
+          };
+        },
+        close: () => db.close(),
+      };
+    } catch {
+      // Fall through to node:sqlite
+    }
   }
+
+  // Fall back to Node's built-in sqlite.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { DatabaseSync } = safeRequire("node:sqlite") as any;
+  const db = new DatabaseSync(path);
+  return {
+    exec: (sql: string) => db.exec(sql),
+    prepare: (sql: string) => db.prepare(sql),
+    close: () => db.close(),
+  };
 }
 
 let _db: DbClient | null = null;

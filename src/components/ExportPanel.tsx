@@ -48,20 +48,36 @@ export function ExportPanel({ result, annotations }: ExportPanelProps) {
   const exportCsv = () => {
     const rows = [
       [
+        "date_reference",
         "theme_label",
         "description",
         "tier",
         "occurrence",
         "run_count",
-        "consistency",
+        "consistency_ratio",
         "keywords",
+        "supporting_quotes",
+        "retrieved_evidence",
+        "participating_seeds",
         "annotation_status",
         "annotation_note",
       ],
     ];
     for (const t of result.reliability.consensus.themes) {
       const anno = annotations[t.label];
+      const llmQuotes = Array.from(
+        new Set((t.lineage ?? []).flatMap((m) => m.quotes).filter(Boolean))
+      );
+      const evidenceTexts = Array.from(
+        new Set((t.evidence ?? []).map((e) => e.text).filter(Boolean))
+      );
+      const seeds = (t.lineage ?? [])
+        .map((m) => m.seed)
+        .filter((s): s is number => s !== null && s !== undefined);
+      const dateRef = (t as { dateReference?: string }).dateReference || "Unstated";
+
       rows.push([
+        csv(dateRef),
         csv(t.label),
         csv(t.description),
         t.tier,
@@ -69,11 +85,65 @@ export function ExportPanel({ result, annotations }: ExportPanelProps) {
         String(t.runCount),
         String(t.consistency),
         csv(t.keywords.join("; ")),
+        csv(llmQuotes.join(" | ")),
+        csv(evidenceTexts.join(" | ")),
+        csv(seeds.join("; ")),
         anno?.status ?? "",
         csv(anno?.note ?? ""),
       ]);
     }
     download(`${safeName}_themes.csv`, rows.map((r) => r.join(",")).join("\n"), "text/csv");
+  };
+
+  const exportEvidenceCsv = () => {
+    const rows = [
+      [
+        "date_reference",
+        "theme_label",
+        "tier",
+        "evidence_type",
+        "text",
+        "source_reference",
+        "similarity_score",
+        "seed",
+      ],
+    ];
+    for (const t of result.reliability.consensus.themes) {
+      const dateRef = (t as { dateReference?: string }).dateReference || "Unstated";
+      for (const m of t.lineage ?? []) {
+        const memberDate = m.dateReference || dateRef;
+        for (const q of m.quotes ?? []) {
+          if (!q) continue;
+          rows.push([
+            csv(memberDate),
+            csv(t.label),
+            t.tier,
+            "LLM Quote",
+            csv(q),
+            "Extracted by model",
+            m.cosineToMedoid !== undefined ? m.cosineToMedoid.toFixed(3) : "1.000",
+            m.seed ? String(m.seed) : "",
+          ]);
+        }
+      }
+      for (const e of t.evidence ?? []) {
+        if (!e.text) continue;
+        const ref = e.rowIndex !== undefined
+          ? `Row ${e.rowIndex}${e.columnName ? ` · ${e.columnName}` : ""}`
+          : `Sentence ${e.unitIndex + 1}`;
+        rows.push([
+          csv(dateRef),
+          csv(t.label),
+          t.tier,
+          "Retrieved Source Evidence",
+          csv(e.text),
+          csv(ref),
+          e.cosine.toFixed(3),
+          "",
+        ]);
+      }
+    }
+    download(`${safeName}_evidence.csv`, rows.map((r) => r.join(",")).join("\n"), "text/csv");
   };
 
   const exportMarkdown = () => {
@@ -96,7 +166,7 @@ export function ExportPanel({ result, annotations }: ExportPanelProps) {
         reliability metrics, theme lineage, evidence, and annotations — into a
         citable, reproducible artifact.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <ExportButton
           icon={ClipboardList}
           label="Markdown report"
@@ -105,9 +175,15 @@ export function ExportPanel({ result, annotations }: ExportPanelProps) {
         />
         <ExportButton
           icon={FileSpreadsheet}
-          label="CSV (themes)"
-          desc="Consensus themes with tiers, consistency, keywords, annotations."
+          label="CSV (Themes Summary)"
+          desc="Consensus themes with tiers, consistency, keywords, evidence quotes, and annotations."
           onClick={exportCsv}
+        />
+        <ExportButton
+          icon={FileSpreadsheet}
+          label="CSV (Evidence & Quotes)"
+          desc="Long-format export of supporting quotes and corpus spans per theme for NVivo/Excel."
+          onClick={exportEvidenceCsv}
         />
         <ExportButton
           icon={FileJson}

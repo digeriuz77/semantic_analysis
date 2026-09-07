@@ -189,9 +189,13 @@ def process_corpus(text: str) -> Dict[str, Any]:
     # Readability (Flesch-Kincaid)
     # FK = 206.835 - 1.015(total words / total sentences) - 84.6(total syllables / total words)
     def count_syllables(word):
+        if not word:
+            return 0
         word = word.lower()
-        if len(word) <= 3: return 1
         word = re.sub(r"[^a-z]", "", word)
+        if not word:
+            return 0
+        if len(word) <= 3: return 1
         count = 0
         vowels = "aeiouy"
         if word[0] in vowels: count += 1

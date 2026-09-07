@@ -10,7 +10,7 @@ import {
 import { DEFAULT_THEMATIC_PROMPT, renderPrompt } from "@/lib/prompts";
 import { FileText, Play, Sliders, Info, Wand2, ChevronDown } from "lucide-react";
 
-export const DEFAULT_SEEDS = [42, 123, 456, 789, 1011, 1213];
+export const DEFAULT_SEEDS = [42, 123, 456];
 export const DEFAULT_PROVIDER: LlmProvider = "fireworks";
 
 export function defaultConfig(): RunConfig {

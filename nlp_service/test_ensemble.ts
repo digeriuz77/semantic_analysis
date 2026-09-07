@@ -19,11 +19,11 @@ const short = chunkText("hello world");
 check("short text -> single chunk, not truncated",
   short.chunks.length === 1 && !short.truncated && short.analyzedChars === 11);
 
-const words = Array.from({ length: 5000 }, (_, i) => `word${i}`).join(" ");
-// ~35k chars -> at 8000/chunk, capped at 4 chunks
+const words = Array.from({ length: 10000 }, (_, i) => `word${i}`).join(" ");
+// ~70k chars -> at 8000/chunk, capped at 8 chunks
 const long = chunkText(words);
-check("35k chars -> 4 chunks (cap), truncated flagged",
-  long.chunks.length === 4 && long.truncated, JSON.stringify({ n: long.chunks.length, t: long.truncated }));
+check("70k chars -> 8 chunks (cap), truncated flagged",
+  long.chunks.length === 8 && long.truncated, JSON.stringify({ n: long.chunks.length, t: long.truncated }));
 check("each chunk within limit", long.chunks.every((c) => c.length <= 8000));
 check("analyzedChars == sum of chunk lengths",
   long.analyzedChars === long.chunks.reduce((s, c) => s + c.length, 0));

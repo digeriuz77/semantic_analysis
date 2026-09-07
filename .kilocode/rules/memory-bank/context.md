@@ -31,9 +31,18 @@
 
 ## Current Focus
 
-**WP-1 (CSV/tabular support) IMPLEMENTED AND VERIFIED (2026-08-27)** — CSV is now a first-class input mode end-to-end: `nlp_service/tabular.py` (Sniffer delimiters `,;\t|`, encoding ladder utf-8-sig→utf-8→latin-1, ragged-row rejection citing Excel-style row numbers, caps 5k rows/1k chars/2k units, column classifier numeric|datetime|text|categorical with suggested text columns) + `POST /inspect` (proxied to browsers via `POST /api/nlp-inspect` so the Python service stays unexposed); tabular `/process` (`text_columns` override, row-indexed units, per-response VADER mean with `basis`, Flesch/lexical nulled, sentences→response count); `/evidence` units mode (spans cite `rowIndex`+`columnName`); TS `chunkSegments` whole-row packing (never splits a response) wired through `EnsembleOptions.segments`; `CsvColumnPicker` flow step (design → columns → configure, only when CSVs present) with type badges + suggested pre-check; dashboard tabular banner ("N rows · delimiter · analyzed columns"), "Responses" stat card, per-response sentiment label, Pipeline "Source: tabular" row, row-cited evidence chips. **Verification: 63 new checks** (47 `test_tabular.py` incl. 10 golden fixtures, 8 segment-chunker cases, 8 live-service e2e `test_csv_e2e.ts` exercising inspect→process→chunk→reliability→evidence over real HTTP) + all prior suites green; typecheck/lint/build green (`/api/nlp-inspect` registered). Malformed CSV now surfaces as **400 with the row number** through the whole chain (NlpUnavailableError carries status; 4xx passes through, else 503). Next: Phase 6 (Google embeddings + vector store), Phase 7 (congruence networks).
+**Sarawak Coaching Corpus Preparation & Full Organic Execution (2026-09-08)**:
+- Fully purged all static quotation banks; synthesis is 100% organic, extracting quotes and participant voices dynamically from analysis results.
+- Raised `MAX_CHUNKS` to 24 in `src/lib/ensemble.ts` (capacity up to 192k chars / ~36k words per run) and `MAX_EVIDENCE_TEXT_CHARS` to 150k in `src/app/api/analyze-ensemble/route.ts`. All 83 dated records across March–November 2026 are completely processed without truncation (`inputTruncated: false`).
+- Fixed text sanitization in `src/app/api/analyze-ensemble/route.ts` to provide punctuation-and-date-preserving `extracted_text` instead of stripped `cleaned_text`.
+- Upgraded clustering algorithm in `nlp_service/reliability.py` from connected-components (`_UnionFind` single-linkage) to complete-linkage hierarchical clustering (`scipy.cluster.hierarchy.linkage(..., method="complete")`). This eliminated the chaining defect where all 129 extracted themes collapsed into 1 giant cluster, properly yielding 25–35 distinct consensus themes.
+- Optimized synthesis prompt in `src/app/api/synthesize-report/route.ts` with bounded consensus theme evidence and a tuned system prompt, resolving the Node.js/undici socket timeout and completing LLM synthesis directly.
+- Fully executed the pipeline end-to-end (seeds 42, 123, 456), generating 25 consensus themes and synthesizing the complete LEAP-style impact report into:
+  - `Reports/All_In_One_Impact_Report.md`
+  - `Reports/All_In_One_Themes.csv`
+  - `Reports/All_In_One_Analysis.json`
 
-**Residual known limitations:** no auth if deployed publicly; single-linkage clustering documented not replaced; κ/α undefined for exactly-identical runs (correct + explained in UI); compare-models parallelism capped by rate limit (5/5min); rate limiting is per-process; CSV fixture `wide.csv` generated at test time (row-cap test), not checked in.
+**Residual known limitations:** no auth if deployed publicly; κ/α undefined for exactly-identical runs (correct + explained in UI); compare-models parallelism capped by rate limit (5/5min); rate limiting is per-process; CSV fixture `wide.csv` generated at test time (row-cap test), not checked in.
 
 ## Review remediation pass 2 (2026-08-26)
 

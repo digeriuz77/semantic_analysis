@@ -85,6 +85,7 @@ export default function AnalyzerPage() {
         ...c,
         paradigm: d.paradigm,
         framework: d.framework,
+        researchQuestion: d.researchQuestion,
         promptTemplate: FRAMEWORKS[d.framework].promptTemplate,
       }));
     });
@@ -124,6 +125,9 @@ export default function AnalyzerPage() {
       if (runConfig.paradigm) formData.append("paradigm", runConfig.paradigm);
       if (runConfig.framework) formData.append("framework", runConfig.framework);
       if (runConfig.adaptive) formData.append("adaptive", "true");
+      if (runConfig.researchQuestion) {
+        formData.append("researchQuestion", runConfig.researchQuestion);
+      }
       const columns = csvColumns[file.name];
       if (isCsv(file) && columns && columns.length > 0) {
         formData.append("text_columns", JSON.stringify(columns));

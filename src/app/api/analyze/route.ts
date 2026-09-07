@@ -7,7 +7,7 @@ import {
 } from "@/lib/fireworks";
 import type { Theme } from "@/types";
 
-const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL || "http://localhost:8000";
+const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL || "http://127.0.0.1:8000";
 const NLP_TIMEOUT_MS = 30_000;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_AI_TEXT_CHARS = 4000;
@@ -43,7 +43,7 @@ async function resolveThemes(
 ): Promise<Theme[]> {
   if (getFireworksApiKey()) {
     const prompt = `Analyze the following text using Braun and Clarke's thematic analysis approach. Identify 3-5 key themes. Return ONLY a JSON array of objects with keys: "name", "description", "keywords" (array of strings), "prevalence" (integer 0-100). Do not include markdown formatting.\n\nText: ${cleanedText.substring(0, MAX_AI_TEXT_CHARS)}`;
-    const content = await fireworksChatCompletion({ user: prompt, maxTokens: 1000 });
+    const content = await fireworksChatCompletion({ user: prompt, maxTokens: 8000 });
     const themes = sanitizeThemes(parseJsonResponse<unknown>(content));
     if (themes.length > 0) return themes;
   }

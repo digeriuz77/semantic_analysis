@@ -5,8 +5,8 @@ import { parseJsonResponse, sanitizeThemes } from "./fireworks";
 
 /** Max characters per LLM call (chunk). */
 export const MAX_TEXT_CHARS = 8000;
-/** Max chunks analyzed per run; input beyond this is honestly truncated. */
-export const MAX_CHUNKS = 4;
+/** Max chunks analyzed per run; input beyond this is honestly truncated. Supports up to ~190k chars. */
+export const MAX_CHUNKS = 24;
 
 export interface EnsembleOptions {
   text: string;
@@ -335,44 +335,53 @@ async function runOneSeed({
   config,
   cap,
 }: RunOneSeedArgs): Promise<ThemeRun> {
-  let status: RunProvenance["status"] = "ok";
-  let error: string | undefined;
   const themeLists: Theme[][] = [];
   const renderedPrompts: string[] = [];
   const rawResponses: string[] = [];
+  let error: string | undefined;
 
-  for (const chunk of plan.chunks) {
-    const renderedPrompt = renderPrompt(template, seed, chunk);
-    renderedPrompts.push(renderedPrompt);
-    let rawResponse = "";
-    try {
-      rawResponse = await adapter.complete({
-        user: renderedPrompt,
-        system: DEFAULT_SYSTEM_PROMPT,
-        temperature: config.temperature,
-        seed,
-        model: config.model,
-        maxTokens: 1400,
-      });
-      let themes = sanitizeThemes(parseJsonResponse<unknown>(rawResponse));
-      if (themes.length === 0 && rawResponse.trim()) {
-        status = "parse_failed";
+  const chunkResults = await Promise.all(
+    plan.chunks.map(async (chunk, i) => {
+      const renderedPrompt = renderPrompt(template, seed, chunk, config.researchQuestion);
+      try {
+        const rawResponse = await adapter.complete({
+          user: renderedPrompt,
+          system: DEFAULT_SYSTEM_PROMPT,
+          temperature: config.temperature,
+          seed,
+          model: config.model,
+          maxTokens: 4000,
+        });
+        let themes = sanitizeThemes(parseJsonResponse<unknown>(rawResponse));
+        if (cap && cap > 0) {
+          themes = themes.slice(0, cap);
+        }
+        return { prompt: renderedPrompt, response: rawResponse, themes, error: undefined };
+      } catch (e) {
+        const errStr = e instanceof Error ? e.message : String(e);
+        return { prompt: renderedPrompt, response: "", themes: [], error: errStr };
       }
-      if (cap && cap > 0) {
-        themes = themes.slice(0, cap);
-      }
-      themeLists.push(themes);
-      rawResponses.push(rawResponse);
-    } catch (e) {
-      status = "request_failed";
-      error = e instanceof Error ? e.message : String(e);
-      rawResponses.push(rawResponse);
+    })
+  );
+
+  for (const res of chunkResults) {
+    renderedPrompts.push(res.prompt);
+    rawResponses.push(res.response);
+    if (res.themes.length > 0) {
+      themeLists.push(res.themes);
+    }
+    if (res.error && !error) {
+      error = res.error;
     }
   }
 
-  // A run that produced zero themes overall is failed for reliability purposes.
   const themes = mergeThemes(themeLists);
-  if (status === "ok" && plan.chunks.length > 0 && themes.length === 0) {
+  let status: RunProvenance["status"] = "ok";
+  if (themes.length > 0) {
+    status = "ok";
+  } else if (error) {
+    status = "request_failed";
+  } else if (plan.chunks.length > 0) {
     status = "parse_failed";
     error = "No themes parsed from any chunk.";
   }

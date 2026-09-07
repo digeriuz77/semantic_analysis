@@ -6,11 +6,13 @@ import type {
   EnsembleResult,
   KappaBand,
   SaturationPoint,
+  SynthesizedReport,
   Theme,
   ThemeAnnotation,
 } from "@/types";
 import type { Paradigm } from "@/lib/paradigms";
 import { ThemeLineageView } from "@/components/ThemeLineageView";
+import { SynthesizedReportView } from "@/components/SynthesizedReportView";
 import { ExportPanel } from "@/components/ExportPanel";
 import { useAnnotations } from "@/lib/useAnnotations";
 import { PARADIGMS } from "@/lib/paradigms";
@@ -36,6 +38,9 @@ import {
   Workflow,
   Flag,
   XCircle,
+  Sparkles,
+  Loader2,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -58,8 +63,54 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
   const [activeFile, setActiveFile] = useState(0);
   const [tab, setTab] = useState<Tab>("reliability");
   const [selectedThemeIdx, setSelectedThemeIdx] = useState<number | null>(null);
+  const [synthesizedReport, setSynthesizedReport] = useState<SynthesizedReport | null>(null);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [showSynthesizedView, setShowSynthesizedView] = useState(false);
+  const [synthError, setSynthError] = useState<string | null>(null);
+
+  const handleSynthesize = async () => {
+    if (synthesizedReport) {
+      setShowSynthesizedView(true);
+      return;
+    }
+    setIsSynthesizing(true);
+    setSynthError(null);
+    try {
+      const res = await fetch("/api/synthesize-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          results,
+          researchQuestion: results[0]?.config?.researchQuestion,
+          provider: results[0]?.config?.provider,
+          model: results[0]?.config?.model,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to generate synthesized report");
+      }
+      const data: SynthesizedReport = await res.json();
+      setSynthesizedReport(data);
+      setShowSynthesizedView(true);
+    } catch (e) {
+      setSynthError(e instanceof Error ? e.message : "Failed to synthesize report");
+    } finally {
+      setIsSynthesizing(false);
+    }
+  };
+
   const result = results[Math.min(activeFile, Math.max(results.length - 1, 0))];
   const { annotations, annotate } = useAnnotations(result.id);
+
+  if (showSynthesizedView && synthesizedReport) {
+    return (
+      <SynthesizedReportView
+        report={synthesizedReport}
+        onBack={() => setShowSynthesizedView(false)}
+      />
+    );
+  }
 
   // Lineage drill-down view takes over the panel. Annotations are keyed by
   // consensus-theme index (not label): duplicate labels are possible and would
@@ -102,13 +153,48 @@ export function EnsembleDashboard({ results, onReset }: EnsembleDashboardProps) 
             </button>
           ))}
         </div>
-        <button
-          onClick={onReset}
-          className="text-sm text-slate-500 hover:text-white transition-colors whitespace-nowrap"
-        >
-          New Analysis
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSynthesize}
+            disabled={isSynthesizing}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap bg-gradient-to-r from-amber-500 to-teal-500 hover:from-amber-400 hover:to-teal-400 text-white shadow-sm transition-all disabled:opacity-50"
+          >
+            {isSynthesizing ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Sparkles size={14} />
+            )}
+            {isSynthesizing ? "Synthesizing..." : "Synthesized Impact Report"}
+          </button>
+          <button
+            onClick={onReset}
+            className="text-sm text-slate-500 hover:text-white transition-colors whitespace-nowrap px-2"
+          >
+            New Analysis
+          </button>
+        </div>
       </div>
+
+      {synthError && (
+        <div className="flex items-start gap-3 bg-red-900/20 border border-red-700/50 rounded-xl p-4">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 flex-shrink-0" />
+          <p className="text-red-200 text-sm">{synthError}</p>
+        </div>
+      )}
+
+      {result.config.researchQuestion && (
+        <div className="flex items-start gap-3 bg-teal-950/30 border border-teal-800/50 rounded-xl p-4">
+          <HelpCircle size={18} className="text-teal-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <span className="text-teal-300 font-semibold text-xs uppercase tracking-wider">
+              Primary Research Question
+            </span>
+            <p className="text-slate-200 text-sm italic mt-0.5">
+              &ldquo;{result.config.researchQuestion}&rdquo;
+            </p>
+          </div>
+        </div>
+      )}
 
       {result.demo && (
         <div className="flex items-start gap-3 bg-amber-900/20 border border-amber-700/50 rounded-xl p-4">

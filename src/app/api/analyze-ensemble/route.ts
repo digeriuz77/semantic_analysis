@@ -32,11 +32,11 @@ export const maxDuration = 300;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CLIENT_TEXT_CHARS = 8000;
-const MAX_EVIDENCE_TEXT_CHARS = 40_000;
+const MAX_EVIDENCE_TEXT_CHARS = 80_000;
 /** LLM-heavy route: 10 analyses / 5 min per client. */
 const RATE_LIMIT = { limit: 10, windowMs: 5 * 60_000 };
 
-const DEFAULT_SEEDS = [42, 123, 456, 789, 1011, 1213];
+const DEFAULT_SEEDS = [42, 123, 456];
 const DEFAULT_MODEL = "accounts/fireworks/models/glm-5p3";
 
 function parseSeeds(value: string | null): number[] {
@@ -144,6 +144,8 @@ export async function POST(request: NextRequest) {
     const framework = (formData.get("framework") as FrameworkId | null) || undefined;
     const adaptive = formData.get("adaptive") === "true";
     const textColumns = parseTextColumns(formData.get("text_columns") as string | null);
+    const researchQuestion =
+      (formData.get("researchQuestion") as string | null) || undefined;
 
     const config: RunConfig = {
       seeds,
@@ -156,6 +158,7 @@ export async function POST(request: NextRequest) {
       paradigm,
       framework,
       adaptive,
+      researchQuestion,
     };
 
     // 1. NLP preprocessing (server-side; file never reaches the browser raw).
@@ -174,6 +177,11 @@ export async function POST(request: NextRequest) {
       MAX_EVIDENCE_TEXT_CHARS
     );
 
+    const analysisText =
+      nlp.extracted_text && nlp.extracted_text.trim().length > 0
+        ? nlp.extracted_text
+        : nlp.cleaned_text;
+
     // 2. Ensemble runs (each carries full provenance). Adaptive mode runs
     // seeds sequentially and stops early on a discovery plateau; otherwise
     // seeds run in parallel. Tabular input uses whole-row chunk packing.
@@ -183,14 +191,14 @@ export async function POST(request: NextRequest) {
     if (isProviderConfigured(provider)) {
       if (adaptive) {
         const adaptiveResult = await runAdaptiveEnsemble({
-          text: nlp.cleaned_text,
+          text: analysisText,
           config,
           segments,
         });
         runs = adaptiveResult.runs;
         stoppedEarly = adaptiveResult.stoppedEarly;
       } else {
-        runs = await runThematicEnsemble({ text: nlp.cleaned_text, config, segments });
+        runs = await runThematicEnsemble({ text: analysisText, config, segments });
       }
     } else {
       demo = true;
@@ -235,6 +243,7 @@ export async function POST(request: NextRequest) {
       seeds,
       paradigm,
       framework,
+      researchQuestion,
       failedRunCount,
       reliabilityRunCount: successfulRuns.length,
       csv: isTabular && nlp.csv

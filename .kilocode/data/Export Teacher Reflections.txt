@@ -1,0 +1,266 @@
+There is a substantial amount of reflective data capturing the direct classroom experiences and tactical shifts of teachers over time. Below is the complete chronological breakdown of entries from T-GROW Coaching Responses - Teacher_Reflections (1).csv, organized by teacher and sorted in ascending date order. All entries preserve the verbatim reflections, targets, and inner shifts recorded.
+Anthony anak Ligok (School: St. Bartholomew | Coach: Eddy)
+Apr 08, 2026
+Confidence (1-5): 1
+Strategies: Questioning
+PD Focus / Level: Dialogic Practice / Beginning
+What Was Noticed: 3/6 murid saya belum lagi dapat menguasai objrktif pembelajaran yang saya tetapkan
+Commitment Target: saya akan cuba membimbing murid saya untuk menguasai objektif pembelajaran yang telah saya tetapkan
+For Coach: Adakah penguasaan bahasa inggeris akan mempengaruhi penguasaan kemahiran STEM murid-murid ? atau adakah bahasa itu yang membuat murid itu berjaya dalam menguasai STEM?
+Carolyne Anak Thunderbirds (School: Ng. Ajau | Coach: Eddy)
+May 15, 2026
+Confidence (1-5): Blank
+Strategies: Wait time, Cold call, Talk partners, Sentence frames, Questioning
+PD Focus / Level: Dialogic Practice / Embedding
+What Was Noticed: I intentionally integrated 'Think-Pair-Share' during our main concept discussion. As a result, the classroom noise level was productive. Students who normally stay quiet were actively talking to their partners, and more hands went up when it was time to share with the whole class.
+Commitment Target: In next Tuesday's Science lesson with Year 4 after school holidays. I will focus on upgrading the peer talk element. Instead of just letting them talk to a partner freely, I will introduce simple sentence frames for example agree with you because... or My idea is different because... to help them structure their partner dialogue more effectively
+Internal Shift Observed: In my Year 4 Science class, during our discussion on animal classification, I consciously stopped the habit of stepping in to answer my own questions when met with silence. Instead, I stood at the front, counted to 5 slowly in my head, and gave them space to think. At first, the silence felt a bit uncomfortable for them, but because wait time is becoming more habitual for me, the students realized I wasn't going to bail them out. Two students who rarely volunteer ended up offering really thoughtful insights because they finally had the time to process the question.
+Habib / Mohamad Habib (School: Ng. Ajau | Coach: Gary)
+Apr 14, 2026
+Confidence (1-5): 2
+Strategies: Wait time, Questioning
+PD Focus / Level: Dialogic Practice / Beginning
+What Was Noticed:
+
+"LO:
+
+In the end of the class, pupils will be able to:
+Divide any two numbers, two digits with one digit
+
+26 pupils, 3 went to remedial class, 23 participate.
+step 1 - Recognise division as equal sharing
+step 2 - Recognise "floors"
+
+What actually works
+
+Demonstrate division as equal sharing using cards - works
+
+Brief explanation of division in vertical from - somehow works
+
+Can identify how to put the numbers in vertical form correctly
+
+Using father accompanying son in the end of the session helps more pupils understand the relationship between digits and floors.
+What failed miserably:
+
+Explanation of division in vertical from - the number of floors - fail
+pupils relate first digits of the number to the divisor very late in the session
+most of the pupils (around 22) failed to see the connection of the digits and the number of floors after 30 minutes into the session.
+Only 3 that clearly exhibit clear understanding (Asher, Macvirna & Rozeanna).
+Pupils forgot or confused (?) about the terms more than, less than, larger and smaller.
+"reserve" not commonly used in previous class, drift terms / words.
+Point to be consider
+voice tone more to shouting instead of calm and clear (less vampire)
+Conclusion:
+
+LO was not achieved, vertical forms (number of floors), not all pupils can recognised it. They can identify how to put the numbers in vertical form correctly."
+Commitment Target: Next lesson, I'm going to give handouts, while explaining, it's better if we do it together in written form, instead of just listening and answering questions from me.
+Internal Shift Observed: I found out what I missed out in this lesson. Handouts were not given, not guidance from me for them to experience or do the actual vertical form in real time. Class was basically questions and answers session instead of actual "do-it" session.
+Apr 27, 2026
+Confidence (1-5): 4
+Strategies: Wait time, Cold call, Talk partners, Questioning
+PD Focus / Level: Dialogic Practice / Developing
+What Was Noticed:
+
+Identify proper fractions and Name proper fractions.
+
+Explanation using words and diagram - fail
+pupils fail to see the connection between the whole parts and the coloured parts.
+Still have the mindset of coloured region as numerator and non-coloured region as denominator, so instead of 2/3, it became 2/1, wrong concept.
+Commitment Target: I will try giving more wait time, and look at time management - according to time card as wait time 30s is too short. 1 minute should be appropriate. Also, will keep asking questions earlier and encouraging student discussion
+Internal Shift Observed:
+
+Demonstrate using circles - works
+
+Explanation using top number as numerator, bottom number as denominator - works
+
+Can identify 3 proper fractions correctly.
+
+This happened when I asked the stronger students to Think-Pair-Share with the weaker students. The weakest students were able to explain and this was surprising.
+May 15, 2026
+Confidence (1-5): Blank
+Strategies: Wait time, Cold call, Talk partners, Sentence frames, Vocabulary display, Questioning
+PD Focus / Level: Dialogic Practice / Developing
+What Was Noticed: Dialogic teaching - Use card cue to limit and as signal to when I should use the What and Why questions. Also the wait time. Wait time management using card cue.
+Commitment Target:
+Cognitive Load (assign points as in 1 RAM) *Real Accessible Memory
+Sentence length limit
+Chaos control - "Fan of Control" (令扇)
+Improved dialogic teaching structure:
+use script
+ability cards
+walkie-talkie
+Internal Shift Observed:
+
+"LO:
+
+Identify improper fractions and mixed numbers.
+
+Points of interest:
+Cognitive Load (assign points as in 1 RAM) *Real Accessible Memory
+Sentence length limit
+Chaos control - "Fan of Control" (令扇)
+Improved dialogic teaching structure:
+use script
+ability cards
+walkie-talkie
+Suggested script:
+Block 1 (I do)Today we are going to learn ____________
+
+Look at this fraction.
+
+Top number is called _____ (numerator)
+
+Bottom number is called ______ (Denominator)
+
+Is the numerator larger than the denominator || or smaller || or the same or equal? - " || " short pause
+Larger or smaller
+Why? Can you prove that? || with your fingers.
+
+or
+
+Can you show me? -------------------------------- [I minute card]
+same / equal
+Show me with your fingers
+left hand will be the numerator
+right hand will be the denominator
+
+*beware of sudden addition, 3+3=6
+When the numerator is equal to || or larger than the denominator, it's called an improper fraction.
+
+"Numerator is equal or larger than numerator is improper fraction"
+
+lets' say that together. (repeat the statement twice, then let them say it together.) * Can ask each table to send representative to say it individualy
+Block 2 (we do)Phase 1
+
+5/4 without diagram.
+
+Now look at this fraction / diagram
+
+What do you thing? Can you say this fraction? (Whole class - check if the rule of saying fraction is no different: numerator over denominator) [What card]
+
+This is five over four.
+
+Is 5 larger than 4 || or smaller than 4? [1 minute card]
+bigger or smaller
+show me || prove - fingers.
+So, is this an improper fractions? [1 minute card]
+
+Phase 2
+
+4/4, now how do we say this fraction?
+
+Is it a proper fraction || or an improper fraction? Why? [Why card]
+
+Phase 3
+
+Show diagram of (4/4) and (1/4)
+
+Now we add another fraction, this ------- (1/4)
+
+As you can see, we have 2 fractions.
+
+(4/4) is fully coloured || all the parts are coloured.
+
+This is called 1 whole.
+
+It means the whole shape (circle)
+
+1 whole means the whole shape.
+
+Together ------> it is (1)(1/4)
+
+Now it's one and one over four.
+
+This is called mixed number.
+
+"mixed number" lets say this together x2
+
+RAM predictions:
+Numerator >= denominator? (process) [2 RAM]
+Prove 3>= 3 (process + motor skill) [4 RAM]
+Facts: Numerator >= denominator = improper fractions [2 RAM]
+Say 5/4 in words (process) [2 RAM]
+Is 5 >= 4? [2 RAM]
+Prove 5 >= 4 [2 RAM]
+Say 4/4 in words [2 RAM]
+say 4/4 is either proper or improper fraction [2 RAM]
+Why 4/4 is improper fraction [2 RAM]
+Observe (4/4) and (1/4) [2 RAM]
+Introduction of "1 whole" [2 RAM]
+Introduction of "mixed number" [2 RAM]
+Total: 24 RAM
+
+Purpose of RAM - for future planning (Cognitive Load)"
+For Coach: Card cue - helps organise and manage wait time. Better respond from the pupils since they get the signal to discuss about certain or specific task that I want.
+May 18, 2026
+Confidence (1-5): Blank
+Strategies: Wait time, Cold call, Talk partners, Sentence frames, Vocabulary display, Questioning
+PD Focus / Level: Dialogic Practice / Developing
+What Was Noticed: Dialogic teaching - I tried the post question, give 1 minute for the pupils to discuss in their group, then cold call the lest confident pupil in each group randomly. This encourage all the group members to participate in the discussion and one unofficial leader emerge from this. The weaker pupils tend to follow what the leader said, sometimes they even voiced their own idea regardless of what the group agreed upon. One or two pupils did not really contribute ideas but just listen to the whole discussion, sometimes got distracted and drift from the activity and start doing something else that's not related to the activity or topic. Apart from all the minor setback, I noticed more English terms are used in group discussion, although they still mainly use Malay or sometimes Iban. As of today, 3 pupils out of 26 had tried to response fully in English. From my perspective, I think they are still not confident enough to response in English even though some of them already know quite a few English terms when it comes to the topic of fractions, reason not determine yet. *walkie-talkie became the tool to encourage some pupils to response.
+Commitment Target: Next lesson will be on addition of two fractions with the same denominator. The plan is: Shorten my questions to the basic understandable sentence, meaning use less "or" in a sentence. example: "Are the denominators in both fraction the same?" instead of: "Is the numerator larger than || or smaller than || or the same as the other denominator?" Wait time increase to 90secs instead of 60secs when using the "Why" card. Wait time for "What card" remains 60secs. Brief pause (<10s) will be implemented after an explanation, before explaining another concept or skill or operation. Fan of Control - breath in and breath out mode. Example: Identify if both fractions have the same denominator -> can perform addition or not -> if can, how to perform it. We-do part needs to have a simple worksheet, to help them see what the actual skill or operation is done (cognitive theory: giving complete solution in written form before the you-do part).
+Internal Shift Observed: Script is a distraction, the class became stiff and I found it hard to focus on the pupils reactions. A few pupils drift and didn't take part in activities - possibly because the lesson became too relax as they can say out the groups collective answers while they themself might not have a solid understanding on the topic discussed. Confident level in using mixed English terms when responding during cold call is noticeable still low, even though in group discussion they are using the terms in English. Dominant pupil or leader in each groups tend to lead the others to respond based on what they understand.
+TeacherID / Confidence: MOHAM-NGA / 4
+For Coach: Rephrase and restructure the pupils answers or responses in English, and then get confirmation of what they are actually trying to say. I always gets the "yes" or a nod from the pupils that are responding. How much true the rephrase and restructure is, no proof to back it up. For cold call, I always starts with the weakest group to avoid those groups to copy the dominant group's answer or response. Most of the time, they gave the correct answer and same as the dominant group. As for the pause time during discussion, I didn't leave my post in front of the pupils, observing from the front didn't give me what actually happened in each groups but it gave me a rough idea of what they are doing, either discussing the answer or explaining to each other or persuading all the members to agree with one or two dominant pupil in the group.
+HEALERY JUMPUT LO (School: Ng. Ajau | Coach: Shamim)
+May 05, 2026
+Confidence (1-5): 2
+Strategies: Wait time, Talk partners, Questioning
+PD Focus / Level: Dialogic Practice / Beginning
+What Was Noticed: Saya pilih seorang ketua (dalam kumpulan kecil) untuk membimbing murid yang lemah. Dalam perbincangan, saya mewajibkan murid menyebut nombor dalam bahasa inggeris sebagai permulaan. Murid lebih yakin untuk berkomunikasi walaupun terdapat campuran bahasa inggeris, bahasa melayu dan bahasa iban.
+Commitment Target: Maths on friday. Saya akan menyuruh murid berbicang berpasangan terlebih dahulu sebelum memilih seorang murid menyelesaikan soalan pada papan tulis.
+For Coach: Saya tidak fasih berbahasa inggeris tapi saya sentiasa mencuba untuk berkomunikasi walaupun saya tauu ayat yang disebut salah dan sebagainya. Begitulah yang saya amalkan ketika mengajar di dalam kelas.
+TeacherID / Confidence: HEALE-NGA / 2
+Internal Shift Observed: Matematik tahun 5. Saya berhenti menjawab soalan yang ditanya oleh saya sendiri, tetapi saya menggalakkan murid mencuba menjawab soalan pada papan tulis walaupun jawapan mereka salah dan sebagainya.
+May 12, 2026
+Confidence (1-5): 3
+Strategies: Talk partners
+PD Focus / Level: Dialogic Practice / Beginning
+What Was Noticed: Kali terakhir saya menggunakan aktiviti lembaran kerja individu. Murid tidak dapat menjawab soalan dengan betul dan kerja tidak siap.
+Commitment Target: Saya menggunakan kaedah think pair share. Saya menulis 1 soalan pada papan tulis. Saya beri masa kepada semua murid memikirkan pengiraan dan jawapan secara individu. Seterusnya, murid mencari pasangan dan membandingkan jawapan bersama pasangan mereka. Dalam pasangan, mereka juga menerangkan jawapan, membetulkan jawapan bersama dan membantu rakan yang kurang faham. Sebagai contoh, seorang murid menerangkan kenapa titik perpuluhan perlu disusun selari semasa operasi tambah dan tolak. Pada akhir aktiviti, pasangan murid berkongsi hasil perbincangan dengan kelas. Murid diminta menulis jawapan bersama pasangan di papan putih dan murid lain memberi pendapat.
+For Coach: -
+TeacherID / Confidence: HEALE-NGA / 3
+Internal Shift Observed: Saya mula pasangkan murid lemah dan murid pandai. Murid pandai membimbing rakan yang lemah dari segi menyelesaikan soalan. Murid lemah mula menunjukkan peningkatan dari segi hasil kerja dan berkeyakinan menyelesaikan soalan.
+May 20, 2026
+Confidence (1-5): Blank
+Strategies: Wait time, Cold call, Talk partners, Sentence frames, Vocabulary display, Questioning
+PD Focus / Level: Dialogic Practice / Developing
+What Was Noticed: I try to encourage students to say numbers in English during Math activities. I find that some students are starting to be more confident in saying simple numbers such as whole numbers, fractions and decimals, but there are still some students who are less confident and need guidance and repetition.
+Commitment Target: My next specific step is to consistently provide number game activities, flashcards, and pronunciation exercises so that students are more fluent and confident in using numbers in English during Mathematics teaching.
+TeacherID: HEALE-NGA
+Internal Shift Observed: I changed my habit from immediately giving students answers to giving them time to think and discuss with their friends first. After that, the students became more active, more of them tried to answer, and their confidence level increased when using Mathematical terms in English.
+JOSHUA ARRY ANAK FRANKIE / JOSHUA ARRY (School: St. Bartholomew | Coach: Eddy)
+Apr 21, 2026
+Confidence (1-5): 4
+Strategies: Wait time, Sentence frames, Questioning
+PD Focus / Level: Dialogic Practice / Developing
+What Was Noticed: They are still learning on how to respond using English, but there's have been a little bit of improvement compared to before
+Commitment Target: I will try to make sure that they are confident in presenting their ideas, answers or questions in front of audiences
+May 08, 2026
+Confidence (1-5): 4
+Strategies: Wait time, Talk partners, Questioning
+PD Focus / Level: Dialogic Practice / Developing
+What Was Noticed: I have tried the talk, pair, share to encourage the pupils to communicate in English, and surprisingly some of them managed to make their partner talk in English during their discussion
+Commitment Target: In Science on Tuesday, I will try the think, pair, share technique with my Year 5 pupils and let them present in front of the class
+For Coach: During lessons, some of my Year 1 and 2 pupils are unable to keep up with the syllabus, as our year 1 and year 2 syllabus are quite hard for them based on their level of understanding. So instead on following the syllabus based on the scheme of work, I am just focusing on making the pupils understand the topic that they are currently learning right now
+TeacherID / Confidence: JOSHU-STB / 4
+Internal Shift Observed: I am realising that adapting the lesson pace to student understanding is more important than strictly following the scheme of work.
+Nur Anis Nabihah binti Mustapha (School: St. Bartholomew | Coach: Shamim)
+May 12, 2026
+Confidence (1-5): 3
+Strategies: Wait time, Cold call, Talk partners, Sentence frames, Vocabulary display, Questioning
+PD Focus / Level: Dialogic Practice / Beginning
+What Was Noticed: I asked the students to try teaching additional mathematical questions to their partners in basic english.
+Commitment Target: I will ask the students to re-explain the methods to me again in english before putting them into pairs
+For Coach: -
+TeacherID / Confidence: NURAN-STB / 3
+Internal Shift Observed: I allowed codeswitching or integration of their native tongue while teaching but a heavy emphasis on the usage of the mathematical terms in english.
+May 19, 2026
+Confidence (1-5): Blank
+Strategies: Wait time, Cold call, Vocabulary display, Questioning
+PD Focus / Level: Dialogic Practice / Beginning
+What Was Noticed: I tried the CPA (concrete, pictorial, abstract) approach as suggested by Miss Shamim. I used bottle caps for missing numbers (addition questions). The students were very excited during the activity. Simultaneously, they understood the concept faster due to the hands on activity.
+Commitment Target: I want to incorporate for CPA focusing on concrete stage in subtraction.
+For Coach: -
+TeacherID: NURAN-STB
+Internal Shift Observed: For pair talk or presentation where students verbally demonstart how they get to their answers, i only gave them initial english language structure as a push and guideline. Despite being hesitant, they were able to walk their peers through their methods using English.
+

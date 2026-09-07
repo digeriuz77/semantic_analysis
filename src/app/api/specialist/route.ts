@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const content = await fireworksChatCompletion({
       user: `${SPECIALIST_PROMPT_PREFIX}${text.substring(0, MAX_SPECIALIST_TEXT_CHARS)}`,
-      maxTokens: 1500,
+      maxTokens: 8000,
     });
 
     const result = sanitizeSpecialistResult(parseJsonResponse<unknown>(content));

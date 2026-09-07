@@ -1,7 +1,7 @@
 import type { ChatAdapter, ChatRequest } from "./types";
 
 const FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions";
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_MS = 120_000;
 
 function apiKey(): string | undefined {
   return process.env.FIREWORKS_API_KEY;
@@ -38,33 +38,53 @@ export const fireworksAdapter: ChatAdapter = {
       body.seed = req.seed;
     }
 
-    const res = await fetch(FIREWORKS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    let res: Response | undefined;
+    let retries = 3;
+    let delayMs = 2000;
 
-    if (!res.ok) {
-      // Surface the provider's own message (invalid key, onboarding required,
-      // rate limit) so deployment misconfiguration is diagnosable from the
-      // per-run provenance panel instead of a bare status code.
+    while (retries >= 0) {
+      res = await fetch(FIREWORKS_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+
+      if (res.status === 429 && retries > 0) {
+        retries--;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        delayMs *= 2;
+        continue;
+      }
+      break;
+    }
+
+    if (!res || !res.ok) {
+      const status = res?.status ?? 500;
       let detail = "";
       try {
-        const errBody = (await res.json()) as { error?: { message?: string } | string };
+        const errBody = (await res?.json()) as { error?: { message?: string } | string };
         const msg =
           typeof errBody?.error === "string" ? errBody.error : errBody?.error?.message;
         if (msg) detail = `: ${msg}`;
       } catch {
         /* non-JSON error body */
       }
-      throw new Error(`Fireworks request failed: ${res.status}${detail}`);
+      throw new Error(`Fireworks request failed: ${status}${detail}`);
     }
 
     const data = await res.json();
-    return data?.choices?.[0]?.message?.content ?? "";
+    const msgObj = data?.choices?.[0]?.message;
+    const content = msgObj?.content;
+    if (typeof content === "string" && content.trim().length > 0) {
+      return content;
+    }
+    if (typeof msgObj?.reasoning_content === "string" && msgObj.reasoning_content.trim().length > 0) {
+      return msgObj.reasoning_content;
+    }
+    return "";
   },
 };

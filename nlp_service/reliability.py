@@ -24,6 +24,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.spatial.distance import squareform
 from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.metrics import cohen_kappa_score
 
@@ -102,20 +104,28 @@ def _kappa_band(k: Optional[float]) -> str:
     return "poor"
 
 
-class _UnionFind:
-    def __init__(self, n: int) -> None:
-        self.parent = list(range(n))
+def _cluster_themes(sim: np.ndarray, cosine_threshold: float) -> List[List[int]]:
+    """Cluster themes using complete-linkage hierarchical clustering.
 
-    def find(self, x: int) -> int:
-        while self.parent[x] != x:
-            self.parent[x] = self.parent[self.parent[x]]
-            x = self.parent[x]
-        return x
-
-    def union(self, a: int, b: int) -> None:
-        ra, rb = self.find(a), self.find(b)
-        if ra != rb:
-            self.parent[rb] = ra
+    Guarantees that every pair of themes within a cluster has pairwise
+    cosine similarity >= cosine_threshold, eliminating the chaining
+    defect of connected components where unrelated themes merge transitively.
+    """
+    n = sim.shape[0]
+    if n == 0:
+        return []
+    if n == 1:
+        return [[0]]
+    dist = np.clip(1.0 - sim, 0.0, 2.0)
+    np.fill_diagonal(dist, 0.0)
+    condensed = squareform(dist, checks=False)
+    Z = linkage(condensed, method="complete")
+    dist_threshold = max(0.01, 1.0 - float(cosine_threshold))
+    labels = fcluster(Z, t=dist_threshold, criterion="distance")
+    classes: Dict[int, List[int]] = {}
+    for idx, lbl in enumerate(labels):
+        classes.setdefault(int(lbl), []).append(idx)
+    return list(classes.values())
 
 
 def _safe_mean(values: List[float], default: float = 0.0) -> float:
@@ -240,6 +250,7 @@ def compute_reliability(
             description = str(theme.get("description", "")).strip()
             keywords = theme.get("keywords", []) or []
             quotes = theme.get("supporting_quotes") or theme.get("quotes") or []
+            date_ref = str(theme.get("date_reference") or theme.get("date") or "").strip()
             text = (name + ". " + description).strip(". ") or name or description
             if not text:
                 continue
@@ -251,11 +262,12 @@ def compute_reliability(
                     "description": description,
                     "keywords": [str(k) for k in keywords if str(k).strip()],
                     "quotes": [str(q) for q in quotes if str(q).strip()],
+                    "date_reference": date_ref,
                     "text": text,
                 }
             )
 
-    not_enough = n_runs < 2 or len(flat) == 0
+    not_enough = n_runs < 1 or len(flat) == 0
     if not_enough:
         return {
             "runCount": n_runs,
@@ -274,17 +286,8 @@ def compute_reliability(
     vecs, backend = embed_texts(texts)
     sim = vecs @ vecs.T  # cosine (rows already unit-normalized)
 
-    # --- Cluster themes into equivalence classes via connected components ---
-    uf = _UnionFind(len(flat))
-    for i in range(len(flat)):
-        for j in range(i + 1, len(flat)):
-            if float(sim[i, j]) >= cosine_threshold:
-                uf.union(i, j)
-
-    classes: Dict[int, List[int]] = {}
-    for i in range(len(flat)):
-        classes.setdefault(uf.find(i), []).append(i)
-    class_lists = list(classes.values())
+    # --- Cluster themes into equivalence classes via complete-linkage ---
+    class_lists = _cluster_themes(sim, cosine_threshold)
 
     # Presence/absence matrix: rows = classes, cols = runs.
     presence = np.zeros((len(class_lists), n_runs), dtype=int)
@@ -292,11 +295,13 @@ def compute_reliability(
         for m in members:
             presence[c_idx, flat[m]["run"]] = 1
 
-    # A theme seen in a single run is never "consensus", even at low ratios
-    # (ceil(0.5 * 2) == 1 would otherwise admit 1-of-2 themes).
+    # A theme seen in a single run is never "consensus" for multi-run ensembles
+    # (min_occurrence >= 2 when n_runs >= 2). For single-run analyses, min_occurrence = 1.
     min_occurrence = int(np.ceil(min_occurrence_ratio * n_runs))
     if n_runs >= 2:
         min_occurrence = max(min_occurrence, 2)
+    else:
+        min_occurrence = 1
 
     consensus_themes: List[Dict[str, Any]] = []
     for members in class_lists:
@@ -321,6 +326,10 @@ def compute_reliability(
                     seen.add(key)
                     keyword_set.append(kw)
 
+        # Collect dates
+        dates = [flat[m]["date_reference"] for m in members if flat[m].get("date_reference") and flat[m]["date_reference"] != "Unstated"]
+        rep_date = dates[0] if dates else "Unstated"
+
         # Lineage: per-member provenance + the cosine that bound it to the cluster.
         # This is the audit trail that makes a consensus theme's derivation
         # inspectable case-by-case (which runs/seeds agreed, how strongly).
@@ -335,6 +344,7 @@ def compute_reliability(
                     "description": flat[m]["description"],
                     "keywords": flat[m]["keywords"][:6],
                     "quotes": flat[m]["quotes"][:3],
+                    "dateReference": flat[m].get("date_reference"),
                     "cosineToMedoid": cosine_to_medoid,
                     "isMedoid": m == medoid,
                 }
@@ -345,6 +355,7 @@ def compute_reliability(
                 "label": rep["name"] or rep["description"][:60] or "Untitled theme",
                 "description": rep["description"],
                 "keywords": keyword_set[:8],
+                "dateReference": rep_date,
                 "occurrence": occurrence,
                 "runCount": n_runs,
                 "consistency": round(consistency, 4),
@@ -451,13 +462,8 @@ def compute_reliability(
             )
             prev_classes = 0
             continue
-        uf_sub = _UnionFind(len(member_idx))
-        idx_map = {orig: pos for pos, orig in enumerate(member_idx)}
-        for a_pos, a_orig in enumerate(member_idx):
-            for b_orig in member_idx[a_pos + 1:]:
-                if float(sim[a_orig, b_orig]) >= cosine_threshold:
-                    uf_sub.union(a_pos, idx_map[b_orig])
-        distinct = len({uf_sub.find(p) for p in range(len(member_idx))})
+        sub_sim = sim[np.ix_(member_idx, member_idx)]
+        distinct = len(_cluster_themes(sub_sim, cosine_threshold))
         saturation_curve.append(
             {
                 "runsIncluded": k,

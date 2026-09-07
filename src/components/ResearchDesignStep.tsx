@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FrameworkId, ParadigmId, ResearchDesign } from "@/types";
 import { PARADIGM_LIST, PARADIGMS } from "@/lib/paradigms";
 import { FRAMEWORK_LIST, FRAMEWORKS, frameworkForParadigm } from "@/lib/frameworks";
-import { Compass, BookOpen, ArrowRight, Check } from "lucide-react";
+import { Compass, BookOpen, ArrowRight, Check, HelpCircle } from "lucide-react";
 
 interface ResearchDesignStepProps {
   files: File[];
@@ -19,6 +19,7 @@ export function ResearchDesignStep({ files, preselectedFramework, onComplete, on
   const [framework, setFramework] = useState<FrameworkId>(
     preselectedFramework ?? "reflexive_ta"
   );
+  const [researchQuestion, setResearchQuestion] = useState("");
 
   const activeParadigm = PARADIGMS[paradigm];
   const activeFramework = FRAMEWORKS[framework];
@@ -165,6 +166,52 @@ export function ResearchDesignStep({ files, preselectedFramework, onComplete, on
         </p>
       </section>
 
+      {/* Primary Research Question */}
+      <section className="bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-white font-semibold flex items-center gap-2">
+            <HelpCircle size={18} className="text-teal-400" />
+            Primary Research Question (Optional)
+          </h3>
+          <span className="text-xs text-slate-500">Guides theme extraction &amp; synthesis</span>
+        </div>
+        <p className="text-slate-400 text-xs mb-3">
+          Focuses the ensemble LLM runs on answering your specific research inquiry, and anchors the cross-case evaluation report.
+        </p>
+        <textarea
+          rows={3}
+          value={researchQuestion}
+          onChange={(e) => setResearchQuestion(e.target.value)}
+          placeholder="e.g. How does instructional coaching support primary STEM teachers in adopting dialogic strategies and managing student talk in English (DLP), and what pedagogical barriers emerge?"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-slate-100 text-sm focus:outline-none focus:border-teal-500 resize-y placeholder:text-slate-600"
+        />
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-xs text-slate-500">Quick presets:</span>
+          <button
+            type="button"
+            onClick={() =>
+              setResearchQuestion(
+                "How does instructional coaching support primary STEM teachers in adopting dialogic strategies and managing student talk in English (DLP), and what pedagogical barriers emerge?"
+              )
+            }
+            className="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-2.5 py-1 rounded transition-colors"
+          >
+            DLP &amp; Dialogic Practice
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setResearchQuestion(
+                "What internal pedagogical shifts and habit changes do teachers report across coaching cycles, and how are these evidenced in student participation?"
+              )
+            }
+            className="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-2.5 py-1 rounded transition-colors"
+          >
+            Teacher Habit Shifts &amp; Impact
+          </button>
+        </div>
+      </section>
+
       {/* Continue */}
       <div className="bg-gradient-to-r from-navy-900 to-slate-900 border border-slate-700 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="text-sm">
@@ -179,7 +226,13 @@ export function ResearchDesignStep({ files, preselectedFramework, onComplete, on
           </p>
         </div>
         <button
-          onClick={() => onComplete({ paradigm, framework })}
+          onClick={() =>
+            onComplete({
+              paradigm,
+              framework,
+              researchQuestion: researchQuestion.trim() || undefined,
+            })
+          }
           className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white px-6 py-3 rounded-lg font-medium transition-all shadow-lg shadow-teal-900/20 whitespace-nowrap"
         >
           Continue → Configure <ArrowRight size={16} />

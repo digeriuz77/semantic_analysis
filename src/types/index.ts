@@ -26,6 +26,8 @@ export interface Theme {
   prevalence: number;
   /** Optional supporting quotes returned by the LLM (evidence grounding). */
   supportingQuotes?: string[];
+  /** Date or temporal reference associated with this theme (e.g. "14 May 2026"). */
+  dateReference?: string;
 }
 
 export interface SpecialistResult {
@@ -56,7 +58,7 @@ export interface NLPStats {
 // Phase 1: Ensemble reliability framework
 // ---------------------------------------------------------------------------
 
-export type LlmProvider = "fireworks" | "openai" | "anthropic" | "gemini" | "openrouter";
+export type LlmProvider = "fireworks" | "openai" | "anthropic" | "gemini" | "openrouter" | "local";
 
 /** Epistemological paradigm, drives which validity criteria are surfaced. */
 export type ParadigmId = "constructivist" | "post_positivist" | "critical" | "pragmatic";
@@ -92,6 +94,8 @@ export interface RunConfig {
   framework?: FrameworkId;
   /** Adaptive mode: run in batches and stop early when saturation plateaus. */
   adaptive?: boolean;
+  /** Primary research question guiding the thematic analysis. */
+  researchQuestion?: string;
 }
 
 /** Provenance for one run: the full audit trail of how its themes were derived. */
@@ -168,6 +172,8 @@ export interface ThemeLineageMember {
   keywords: string[];
   /** Supporting quotes returned by the model for this run's theme variant. */
   quotes: string[];
+  /** Optional date or temporal reference associated with this theme. */
+  dateReference?: string;
   /** Cosine similarity of this member to the cluster medoid. */
   cosineToMedoid: number;
   /** True if this is the representative (most central) member. */
@@ -231,6 +237,8 @@ export interface PipelineTrace {
   /** Research design choices recorded for transparency. */
   paradigm?: ParadigmId;
   framework?: FrameworkId;
+  /** Primary research question guiding the analysis. */
+  researchQuestion?: string;
   /** Runs excluded from reliability scoring (request/parse failures). */
   failedRunCount?: number;
   /** Runs actually scored by the reliability engine. */
@@ -294,6 +302,8 @@ export interface CoreqResponse {
 export interface ResearchDesign {
   paradigm: ParadigmId;
   framework: FrameworkId;
+  /** Primary research question guiding the analysis. */
+  researchQuestion?: string;
 }
 
 /** Full output of a single document's ensemble analysis. */
@@ -356,3 +366,53 @@ export interface DatasetIndex {
   description: string;
   datasets: DatasetDescriptor[];
 }
+
+// ---------------------------------------------------------------------------
+// Cross-Document Synthesis & Impact Reporting (LEAP emulated)
+// ---------------------------------------------------------------------------
+
+export interface TriangulatedThemeRow {
+  theme: string;
+  description: string;
+  teacherEvidence: string;
+  coachEvidence: string;
+  artifactEvidence: string;
+}
+
+export interface AttributedQuote {
+  quote: string;
+  speaker: string;
+  role: string;
+  date?: string;
+  context?: string;
+  phase?: string;
+}
+
+export interface EvaluationStrand {
+  title: string;
+  summary: string;
+  keyPoints: string[];
+}
+
+export interface SynthesizedReport {
+  title: string;
+  researchQuestion?: string;
+  generatedAt: string;
+  analyzedFiles: string[];
+  executiveSummary: {
+    headlineFinding: string;
+    narrative: string;
+  };
+  strands: EvaluationStrand[];
+  triangulationMatrix: TriangulatedThemeRow[];
+  selectedVoice: AttributedQuote[];
+  strengths: string[];
+  risks: string[];
+  priorityActions: {
+    action: string;
+    whyItMatters: string;
+    leadRole: string;
+  }[];
+  markdown: string;
+}
+
